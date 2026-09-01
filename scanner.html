@@ -160,6 +160,17 @@
                                  // lebih lebar, membantu barcode besar/dekat
                                  // tetap seluruhnya masuk frame.
         disableFlip: false,
+        // PENTING: resolusi/advanced constraints HARUS lewat sini
+        // (config.videoConstraints), BUKAN dicampur ke argumen pertama
+        // qrReader.start() — argumen pertama cuma boleh 1 key kalau
+        // berupa object (mis. { facingMode: ... } saja), kalau lebih dari
+        // 1 key library ini melempar error "cameraIdOrConfig object
+        // should have exactly 1 key".
+        videoConstraints: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -170,20 +181,10 @@
         ]
       };
 
-      var videoConstraints = {
-        facingMode: 'environment',
-        // Minta resolusi lebih tinggi dari default (biasanya ~640x480 di
-        // banyak browser mobile) supaya bar tipis pada barcode tetap
-        // terbaca jelas walau difoto agak jauh. Browser akan otomatis
-        // turun ke resolusi terdekat yang didukung kalau kamera tidak
-        // mendukung nilai ideal ini.
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        advanced: [{ focusMode: 'continuous' }]
-      };
+      var cameraIdOrConfig = { facingMode: 'environment' };
 
       qrReader.start(
-        videoConstraints,
+        cameraIdOrConfig,
         config,
         function onScanSuccess(decodedText) {
           if (busy) return;
