@@ -26,11 +26,17 @@
   }
   #reader { position: fixed; inset: 0; }
   #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
-  /* Sembunyikan kotak qrbox bawaan library — kita gantikan dengan overlay
-     custom yang lebih LEBAR (mengikuti bentuk barcode 1D: pendek & lebar),
-     supaya user tidak perlu maju-mundur presisi untuk pas-in barcode ke
-     kotak sempit bawaan. */
-  #reader > div:first-child > div:first-child { border: none !important; }
+  /* Sembunyikan kotak/shade qrbox BAWAAN library (html5-qrcode membuat
+     elemen dengan id "qr-shaded-region" + border putih sendiri) — kita
+     gantikan dengan overlay custom #scanGuide yang proporsinya lebih pas
+     untuk barcode 1D. Selector by id di sini jauh lebih pasti nembak
+     dibanding menebak posisi lewat :first-child (yang kemarin ternyata
+     meleset sehingga 2 kotak numpuk / "double"). Sebagai jaga-jaga kalau
+     versi library berbeda strukturnya, border/shadow SEMUA div turunan
+     langsung #reader juga ditiadakan lewat JS setelah start() (lihat
+     hideLibraryQrbox() di bawah).) */
+  #reader #qr-shaded-region { display: none !important; }
+  #reader > div > div { border: none !important; box-shadow: none !important; }
   #scanGuide {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
     width: 86vw; max-width: 480px; height: 34vw; max-height: 190px;
@@ -76,8 +82,20 @@
       var closeBtn = document.getElementById('closeBtn');
       var qrReader = null;
       var busy = false;
+      // Penanda bahwa hasil (sukses/error) SUDAH terkirim ke app pemanggil.
+      // Mencegah bug "Scan dibatalkan" nongol padahal barcode-nya sukses
+      // terbaca: tanpa penanda ini, kalau closeBtn/tombol X sempat ter-tap
+      // (mis. karena user refleks nutup) SETELAH hasil sukses terkirim
+      // tapi SEBELUM window benar-benar close, stopAndClose(true) akan
+      // ikut mengirim so_scan_cancel menyusul so_scan_result — dua pesan
+      // itu lomba sampai ke app dan yang paling akhir "menang" tampil di
+      // modal. Dengan flag ini, begitu satu hasil final terkirim, tidak
+      // ada pesan lain yang boleh menyusul lagi.
+      var resultSent = false;
 
       function send(payload) {
+        if (payload.type !== 'so_scan_result' && resultSent) return;
+        if (payload.type === 'so_scan_result' || payload.type === 'so_scan_error') resultSent = true;
         try {
           if (window.opener) window.opener.postMessage(payload, '*');
         } catch (e) { /* no-op */ }
@@ -196,6 +214,28 @@
         },
         function onScanFailure() { /* normal, diamkan */ }
       ).then(function () {
+        // Jaga-jaga tambahan di luar CSS: cari & sembunyikan paksa elemen
+        // shade/border qrbox bawaan library apapun strukturnya, supaya
+        // tidak ada 2 kotak numpuk ("double") — CSS di atas menangani
+        // kasus umum, ini menangani kasus id/struktur berbeda.
+        function hideLibraryQrbox() {
+          var readerEl = document.getElementById('reader');
+          if (!readerEl) return;
+          var shaded = document.getElementById('qr-shaded-region');
+          if (shaded) shaded.style.display = 'none';
+          // Matikan border/shadow di semua div turunan #reader KECUALI
+          // yang membungkus <video> itu sendiri — supaya video tidak
+          // ikut ketiban style yang tidak perlu.
+          var divs = readerEl.querySelectorAll('div');
+          divs.forEach(function (el) {
+            if (el.querySelector('video')) return;
+            el.style.border = 'none';
+            el.style.boxShadow = 'none';
+          });
+        }
+        hideLibraryQrbox();
+        setTimeout(hideLibraryQrbox, 300); // library kadang re-render qrbox sesaat setelah start
+
         // Tap-to-focus: beberapa HP tidak otomatis re-fokus saat objek
         // berubah jarak mendadak (mis. dari cek email lalu langsung
         // hadap kamera dekat barang). applyConstraints dengan
