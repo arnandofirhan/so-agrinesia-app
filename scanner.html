@@ -326,14 +326,22 @@
       requestFullscreenSafe();
       // Sebagian browser mobile hanya mengizinkan requestFullscreen kalau
       // dipicu langsung dari gesture user (tap), bukan otomatis saat
-      // halaman dibuka. Sebagai fallback, tap pertama DI LUAR area video
-      // (mis. di tulisan hint bawah) juga akan mencoba masuk fullscreen.
-      // Sengaja TIDAK ditumpuk di listener tap-to-focus milik video (lihat
-      // di bawah) supaya tap untuk fokus kamera tidak sekaligus memicu
-      // notifikasi "keluar dari layar penuh" milik Chrome — dua gesture
-      // itu dipisah biar jelas mana yang ngapain.
-      document.getElementById('header').addEventListener('click', requestFullscreenSafe, { once: true });
-      document.getElementById('msg').addEventListener('click', requestFullscreenSafe, { once: true });
+      // halaman dibuka. Sebagai fallback, tap PERTAMA DI MANA SAJA di layar
+      // (termasuk area video kamera) juga mencoba masuk fullscreen —
+      // sebelumnya cuma header/pesan bawah yang didengarkan, jadi kalau tap
+      // pertama user justru di tengah layar (paling wajar, itu area video),
+      // fullscreen tidak pernah kepicu & address bar tetap terlihat penuh
+      // sesi. { once: true } di listener body memastikan ini cuma jalan
+      // SEKALI dan tidak mengganggu tap-to-focus milik video (listener
+      // terpisah di bawah, keduanya boleh jalan bersamaan untuk tap yang
+      // sama tanpa konflik).
+      document.body.addEventListener('click', requestFullscreenSafe, { once: true });
+      document.addEventListener('visibilitychange', function () {
+        // Sebagian browser Android otomatis keluar dari fullscreen saat
+        // tab sempat pindah fokus (mis. notifikasi masuk) lalu kembali —
+        // coba masuk fullscreen lagi begitu tab aktif kembali.
+        if (!document.hidden && !document.fullscreenElement) requestFullscreenSafe();
+      });
 
       if (typeof Html5Qrcode === 'undefined') {
         setStatus('Library kamera gagal dimuat. Cek koneksi internet.', 'error', { persist: true });
