@@ -12,18 +12,26 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overflow: hidden;
   }
+  /* ===== Header ===================================================== */
   #header {
     position: fixed; top: 0; left: 0; right: 0;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 16px;
+    padding: 14px 18px;
     padding-top: max(14px, env(safe-area-inset-top));
-    background: #0f4d2e; color: #fff; z-index: 2;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+    color: #fff; z-index: 2;
+    backdrop-filter: blur(2px);
   }
-  #header .ttl { font-size: 15px; font-weight: 600; }
+  #header .ttl { font-size: 15.5px; font-weight: 600; letter-spacing: 0.1px; }
   #closeBtn {
-    width: 32px; height: 32px; border-radius: 50%; border: none;
-    background: rgba(255,255,255,0.15); color: #fff; font-size: 18px; line-height: 1;
+    width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,0.16); color: #fff; font-size: 17px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease;
   }
+  #closeBtn:active { background: rgba(255,255,255,0.28); transform: scale(0.94); }
+
+  /* ===== Camera preview =============================================== */
   #reader { position: fixed; inset: 0; }
   #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
   /* Sembunyikan kotak/shade qrbox BAWAAN library (html5-qrcode membuat
@@ -37,34 +45,144 @@
      hideLibraryQrbox() di bawah).) */
   #reader #qr-shaded-region { display: none !important; }
   #reader > div > div { border: none !important; box-shadow: none !important; }
+
+  /* ===== Scan guide (kotak target) =====================================
+     3 state visual, murni tampilan — TIDAK mengubah flow:
+       .state-idle    -> default, putih, pulsing halus (nunggu barcode)
+       .state-checking-> kuning/amber, saat barcode barusan kebaca kamera
+                         dan sedang "diperiksa" (nunggu balasan dari app)
+       .state-success -> hijau, app konfirmasi barcode ditemukan
+       .state-error   -> merah, app konfirmasi barcode TIDAK ditemukan
+                         (atau error kamera)                              */
   #scanGuide {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
     width: 86vw; max-width: 480px; height: 34vw; max-height: 190px;
-    border: 3px solid rgba(255,255,255,0.9);
-    border-radius: 14px;
-    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    border-radius: 18px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.4);
     z-index: 1; pointer-events: none;
-    animation: guidePulse 2.2s ease-in-out infinite;
+    transition: box-shadow 0.25s ease;
   }
-  @keyframes guidePulse {
-    0%, 100% { border-color: rgba(255,255,255,0.9); }
-    50% { border-color: rgba(255,255,255,0.5); }
+  #scanGuide .frame {
+    position: absolute; inset: 0;
+    border-radius: 18px;
+    border: 2px solid rgba(255,255,255,0.55);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
   }
-  #scanGuide::before, #scanGuide::after {
-    content: ''; position: absolute; width: 26px; height: 26px;
-    border-color: #4ade80; border-style: solid; border-width: 0;
+  #scanGuide .corner {
+    position: absolute; width: 28px; height: 28px;
+    border-style: solid; border-width: 0;
+    border-color: #ffffff;
+    transition: border-color 0.25s ease, filter 0.25s ease;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.35));
   }
-  #scanGuide .corner { position: absolute; width: 26px; height: 26px; }
-  #scanGuide .tl { top: -3px; left: -3px; border-top: 4px solid #4ade80; border-left: 4px solid #4ade80; border-radius: 14px 0 0 0; }
-  #scanGuide .tr { top: -3px; right: -3px; border-top: 4px solid #4ade80; border-right: 4px solid #4ade80; border-radius: 0 14px 0 0; }
-  #scanGuide .bl { bottom: -3px; left: -3px; border-bottom: 4px solid #4ade80; border-left: 4px solid #4ade80; border-radius: 0 0 0 14px; }
-  #scanGuide .br { bottom: -3px; right: -3px; border-bottom: 4px solid #4ade80; border-right: 4px solid #4ade80; border-radius: 0 0 14px 0; }
+  #scanGuide .tl { top: -3px; left: -3px; border-top-width: 4px; border-left-width: 4px; border-radius: 18px 0 0 0; }
+  #scanGuide .tr { top: -3px; right: -3px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 18px 0 0; }
+  #scanGuide .bl { bottom: -3px; left: -3px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 18px; }
+  #scanGuide .br { bottom: -3px; right: -3px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 18px 0; }
+
+  /* Garis laser tipis yang bergerak naik-turun, hanya tampil saat idle,
+     sekadar sinyal "kamera aktif & siap" — murni dekoratif. */
+  #scanGuide .laser {
+    position: absolute; left: 6%; right: 6%; height: 2px; top: 50%;
+    background: linear-gradient(90deg, transparent 0%, rgba(74,222,128,0.9) 50%, transparent 100%);
+    border-radius: 2px;
+    opacity: 0.9;
+    animation: laserMove 2.1s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(74,222,128,0.7);
+  }
+  @keyframes laserMove {
+    0%   { top: 14%; opacity: 0; }
+    10%  { opacity: 0.9; }
+    50%  { top: 86%; opacity: 0.9; }
+    90%  { opacity: 0.9; }
+    100% { top: 14%; opacity: 0; }
+  }
+
+  /* State: idle (default) — pulsing halus di border putih */
+  #scanGuide.state-idle .frame { animation: framePulseIdle 2.4s ease-in-out infinite; }
+  @keyframes framePulseIdle {
+    0%, 100% { border-color: rgba(255,255,255,0.55); }
+    50% { border-color: rgba(255,255,255,0.92); }
+  }
+  #scanGuide.state-idle .corner { border-color: #ffffff; }
+
+  /* State: checking — amber/kuning, dipakai singkat sambil app memvalidasi
+     barcode yang barusan berhasil dibaca kamera */
+  #scanGuide.state-checking .laser { display: none; }
+  #scanGuide.state-checking .frame {
+    border-color: #fbbf24;
+    animation: framePulseChecking 0.9s ease-in-out infinite;
+  }
+  @keyframes framePulseChecking {
+    0%, 100% { border-color: #fbbf24; box-shadow: 0 0 0 0 rgba(251,191,36,0.35); }
+    50% { border-color: #fde68a; box-shadow: 0 0 0 8px rgba(251,191,36,0); }
+  }
+  #scanGuide.state-checking .corner { border-color: #fbbf24; filter: drop-shadow(0 0 6px rgba(251,191,36,0.7)); }
+
+  /* State: success — hijau tegas + sedikit "pop" saat transisi masuk */
+  #scanGuide.state-success .laser { display: none; }
+  #scanGuide.state-success .frame {
+    border-color: #22c55e;
+    border-width: 3px;
+    box-shadow: 0 0 0 6px rgba(34,197,94,0.18);
+  }
+  #scanGuide.state-success .corner { border-color: #22c55e; filter: drop-shadow(0 0 8px rgba(34,197,94,0.85)); }
+  #scanGuide.state-success { animation: guidePopIn 0.22s ease; }
+
+  /* State: error — merah, sedikit "shake" supaya kerasa sebagai sinyal
+     negatif (jarak terlalu jauh / barcode tak dikenal / gagal akses kamera) */
+  #scanGuide.state-error .laser { display: none; }
+  #scanGuide.state-error .frame {
+    border-color: #ef4444;
+    border-width: 3px;
+    box-shadow: 0 0 0 6px rgba(239,68,68,0.16);
+  }
+  #scanGuide.state-error .corner { border-color: #ef4444; filter: drop-shadow(0 0 8px rgba(239,68,68,0.85)); }
+  #scanGuide.state-error { animation: guideShake 0.32s ease; }
+
+  @keyframes guidePopIn {
+    0% { transform: translate(-50%, -50%) scale(0.96); }
+    60% { transform: translate(-50%, -50%) scale(1.015); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes guideShake {
+    0%, 100% { transform: translate(-50%, -50%); }
+    25% { transform: translate(calc(-50% - 5px), -50%); }
+    50% { transform: translate(calc(-50% + 5px), -50%); }
+    75% { transform: translate(calc(-50% - 3px), -50%); }
+  }
+
+  /* Badge status kecil di atas kotak scan (ikon + label singkat),
+     murni dekoratif, mengikuti state yang sama dengan kotak. */
+  #scanStatusBadge {
+    position: fixed; left: 50%; transform: translate(-50%, 0);
+    top: calc(50% - 17vw - 46px);
+    max-width: 92vw;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.1px;
+    color: #fff;
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(6px);
+    display: inline-flex; align-items: center; gap: 6px;
+    z-index: 2;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    white-space: nowrap;
+  }
+  #scanStatusBadge.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  #scanStatusBadge.badge-checking { background: rgba(251,191,36,0.92); color: #422006; }
+  #scanStatusBadge.badge-success { background: rgba(34,197,94,0.94); color: #052e14; }
+  #scanStatusBadge.badge-error { background: rgba(239,68,68,0.94); color: #450a0a; }
+
+  /* ===== Bottom message bar ============================================ */
   #msg {
     position: fixed; left: 0; right: 0; bottom: 0;
-    padding: 14px 16px; padding-bottom: max(14px, env(safe-area-inset-bottom));
-    background: rgba(15,77,46,0.92); color: #fff; font-size: 13.5px; text-align: center; z-index: 3;
+    padding: 15px 18px; padding-bottom: max(15px, env(safe-area-inset-bottom));
+    background: rgba(15,77,46,0.94); color: #fff; font-size: 13.5px; text-align: center; z-index: 3;
     transition: background 0.25s ease, transform 0.2s ease;
     display: flex; align-items: center; justify-content: center; gap: 8px;
+    backdrop-filter: blur(6px);
   }
   #msg .status-icon { font-size: 15px; line-height: 1; flex-shrink: 0; }
   #msg.is-error {
@@ -86,10 +204,11 @@
     100% { transform: translateY(0); opacity: 1; }
   }
   #tapFocusHint {
-    position: fixed; left: 0; right: 0; bottom: 56px;
-    text-align: center; color: rgba(255,255,255,0.75); font-size: 11.5px;
+    position: fixed; left: 0; right: 0; bottom: 58px;
+    text-align: center; color: rgba(255,255,255,0.8); font-size: 11.5px;
     z-index: 2; padding: 0 16px; pointer-events: none;
     transition: opacity 0.2s ease;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
   #tapFocusHint.is-hidden { opacity: 0; }
 </style>
@@ -97,7 +216,10 @@
 <body>
   <div id="header"><span class="ttl">Scan Barcode</span><button id="closeBtn">✕</button></div>
   <div id="reader"></div>
-  <div id="scanGuide">
+  <div id="scanStatusBadge"></div>
+  <div id="scanGuide" class="state-idle">
+    <div class="frame"></div>
+    <div class="laser"></div>
     <div class="corner tl"></div><div class="corner tr"></div>
     <div class="corner bl"></div><div class="corner br"></div>
   </div>
@@ -109,6 +231,8 @@
       var msgEl = document.getElementById('msg');
       var hintEl = document.getElementById('tapFocusHint');
       var closeBtn = document.getElementById('closeBtn');
+      var guideEl = document.getElementById('scanGuide');
+      var badgeEl = document.getElementById('scanStatusBadge');
       var qrReader = null;
       // "busy" menahan scan barcode BARU selagi hasil scan sebelumnya masih
       // diproses (nunggu jawaban dari app: ditemukan / tidak / error) —
@@ -117,11 +241,37 @@
       // tanpa jendela kamera pernah tertutup di antaranya.
       var busy = false;
       var statusResetTimer = null;
+      var guideResetTimer = null;
 
       function send(payload) {
         try {
           if (window.opener) window.opener.postMessage(payload, '*');
         } catch (e) { /* no-op */ }
+      }
+
+      // ---- Visual state kotak scan + badge (MURNI TAMPILAN) --------------
+      // Tidak menyentuh flow sama sekali: hanya mengganti class CSS pada
+      // #scanGuide dan isi #scanStatusBadge mengikuti kind yang SUDAH ADA
+      // di alur pesan (checking / success / error / idle).
+      function setGuideState(kind, label) {
+        guideEl.className = 'state-' + kind;
+        if (guideResetTimer) { clearTimeout(guideResetTimer); guideResetTimer = null; }
+
+        if (kind === 'idle') {
+          badgeEl.className = '';
+          badgeEl.textContent = '';
+          return;
+        }
+
+        var icon = kind === 'checking' ? '⏳' : kind === 'success' ? '✓' : '⚠';
+        badgeEl.textContent = icon + ' ' + label;
+        badgeEl.className = 'badge-' + kind + ' show';
+
+        if (kind === 'success' || kind === 'error') {
+          guideResetTimer = setTimeout(function () {
+            setGuideState('idle');
+          }, 2600);
+        }
       }
 
       // Tampilkan pesan status di banner bawah jendela kamera ITU SENDIRI —
@@ -135,6 +285,11 @@
         var icon = kind === 'error' ? '⚠️' : kind === 'success' ? '✅' : kind === 'checking' ? '⏳' : '';
         msgEl.innerHTML = (icon ? '<span class="status-icon">' + icon + '</span>' : '') + '<span>' + text.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>';
         msgEl.className = kind ? 'is-' + kind : '';
+
+        // Kotak scan & badge kecil mengikuti kind yang sama persis dengan
+        // banner bawah — tidak ada logika baru, cuma cermin visual.
+        setGuideState(kind || 'idle', text);
+
         if (statusResetTimer) clearTimeout(statusResetTimer);
         var persist = opts && opts.persist;
         if (!persist && (kind === 'error' || kind === 'success')) {
