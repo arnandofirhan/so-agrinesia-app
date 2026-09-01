@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Scan Barcode — Stock Opname</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #header {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    background: #0f4d2e; color: #fff; z-index: 2;
+  }
+  #header .ttl { font-size: 15px; font-weight: 600; }
+  #closeBtn {
+    width: 32px; height: 32px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,0.15); color: #fff; font-size: 18px; line-height: 1;
+  }
+  #reader { position: fixed; inset: 0; }
+  #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+  #msg {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: rgba(15,77,46,0.92); color: #fff; font-size: 13px; text-align: center; z-index: 2;
+  }
+</style>
+</head>
+<body>
+  <div id="header"><span class="ttl">Scan Barcode</span><button id="closeBtn">✕</button></div>
+  <div id="reader"></div>
+  <div id="msg">Arahkan kamera ke barcode…</div>
+
+  <script>
+    (function () {
+      var msgEl = document.getElementById('msg');
+      var closeBtn = document.getElementById('closeBtn');
+      var qrReader = null;
+      var busy = false;
+
+      function send(payload) {
+        try {
+          if (window.opener) window.opener.postMessage(payload, '*');
+        } catch (e) { /* no-op */ }
+      }
+
+      function stopAndClose(sendCancel) {
+        if (qrReader) {
+          try {
+            qrReader.stop().then(function () {
+              try { qrReader.clear(); } catch (e) {}
+              if (sendCancel) send({ type: 'so_scan_cancel' });
+              window.close();
+            }).catch(function () { window.close(); });
+          } catch (e) { window.close(); }
+        } else {
+          if (sendCancel) send({ type: 'so_scan_cancel' });
+          window.close();
+        }
+      }
+
+      closeBtn.addEventListener('click', function () { stopAndClose(true); });
+
+      if (typeof Html5Qrcode === 'undefined') {
+        msgEl.textContent = 'Library kamera gagal dimuat. Cek koneksi internet.';
+        send({ type: 'so_scan_error', message: 'Library kamera (html5-qrcode) gagal dimuat.' });
+        return;
+      }
+
+      qrReader = new Html5Qrcode('reader', false);
+      var config = {
+        fps: 10,
+        qrbox: { width: 260, height: 160 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      };
+
+      qrReader.start(
+        { facingMode: 'environment' },
+        config,
+        function onScanSuccess(decodedText) {
+          if (busy) return;
+          busy = true;
+          msgEl.textContent = 'Barcode terbaca: ' + decodedText;
+          send({ type: 'so_scan_result', barcode: decodedText });
+          setTimeout(function () { stopAndClose(false); }, 300);
+        },
+        function onScanFailure() { /* normal, diamkan */ }
+      ).catch(function (err) {
+        var name = err && err.name;
+        var m;
+        if (name === 'NotAllowedError') {
+          m = 'Akses kamera ditolak. Buka Pengaturan HP → Aplikasi → Chrome → Izin → Kamera → pastikan Diizinkan.';
+        } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+          m = 'Kamera belakang tidak ditemukan di perangkat ini.';
+        } else if (name === 'NotReadableError') {
+          m = 'Kamera sedang dipakai aplikasi lain.';
+        } else {
+          m = 'Tidak bisa mengakses kamera: ' + (err && err.message ? err.message : err) + '.';
+        }
+        msgEl.textContent = m;
+        send({ type: 'so_scan_error', message: m });
+      });
+    })();
+  </script>
+</body>
+</html>
