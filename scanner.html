@@ -152,29 +152,6 @@
     75% { transform: translate(calc(-50% - 3px), -50%); }
   }
 
-  /* Badge status kecil di atas kotak scan (ikon + label singkat),
-     murni dekoratif, mengikuti state yang sama dengan kotak. */
-  #scanStatusBadge {
-    position: fixed; left: 50%; transform: translate(-50%, 0);
-    top: calc(50% - 17vw - 46px);
-    max-width: 92vw;
-    padding: 7px 16px;
-    border-radius: 999px;
-    font-size: 12.5px; font-weight: 600; letter-spacing: 0.1px;
-    color: #fff;
-    background: rgba(255,255,255,0.16);
-    backdrop-filter: blur(6px);
-    display: inline-flex; align-items: center; gap: 6px;
-    z-index: 2;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
-    white-space: nowrap;
-  }
-  #scanStatusBadge.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  #scanStatusBadge.badge-checking { background: rgba(251,191,36,0.92); color: #422006; }
-  #scanStatusBadge.badge-success { background: rgba(34,197,94,0.94); color: #052e14; }
-  #scanStatusBadge.badge-error { background: rgba(239,68,68,0.94); color: #450a0a; }
-
   /* ===== Bottom message bar ============================================ */
   #msg {
     position: fixed; left: 0; right: 0; bottom: 0;
