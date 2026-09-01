@@ -75,8 +75,30 @@
     <img src="icon-192.png" alt="Stock Opname">
     <div class="txt">Memuat Stock Opname…</div>
   </div>
+  <!--
+    PENTING soal kamera: JANGAN ganti ini jadi navigasi top-level
+    (window.location = SO_APP_URL). App SO (JavaScript.html, fungsi
+    isRunningAsPwa()) SENGAJA mengecek window.matchMedia('(display-mode:
+    standalone)') pada TOP-LEVEL window untuk memutuskan apakah fitur Scan
+    Barcode boleh dipakai. Kalau top-level window dinavigasi keluar dari
+    origin/scope PWA ini (ke script.google.com), Android/Chrome keluar dari
+    mode standalone WebAPK, display-mode berubah, dan app SO otomatis
+    mengunci fitur scan (nampilin modal "Install Aplikasi Dulu") — walau
+    sebenarnya app sudah ter-install. Makanya HARUS tetap iframe, supaya
+    top-level document (index.html di GitHub Pages ini) yang tetap
+    standalone, sementara isi app SO dimuat di iframe di dalamnya.
+
+    Yang sebelumnya kurang: atribut "allow" pada iframe ini TIDAK
+    menyertakan "camera" (cuma clipboard-write), sehingga browser
+    memblokir permission delegation ke iframe SEBELUM sempat sampai ke
+    getUserMedia()/Html5Qrcode di dalamnya. Ditambahkan camera & microphone
+    di bawah.
+  -->
+  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read"></iframe>
+
   <script>
     (function () {
+      var frame = document.getElementById('appFrame');
       var splash = document.getElementById('splash');
 
       if (!SO_APP_URL || SO_APP_URL.indexOf('GANTI_DENGAN_URL_EXEC_KAMU') !== -1) {
@@ -86,16 +108,12 @@
         return;
       }
 
-      // PENTING: navigasi top-level (bukan iframe).
-      // Kamera/getUserMedia butuh delegasi izin lintas-frame yang tidak
-      // bisa ditembus kalau app SO dimuat lewat iframe di dalam PWA ini,
-      // karena Apps Script sendiri sudah merender di iframe internal
-      // (script.googleusercontent.com). Iframe-di-dalam-iframe inilah
-      // yang membuat browser memblokir kamera sebelum sempat muncul
-      // dialog izin.
-      setTimeout(function () {
-        window.location.replace(SO_APP_URL);
-      }, 150);
+      frame.addEventListener('load', function () {
+        splash.classList.add('hide');
+        setTimeout(function () { splash.style.display = 'none'; }, 300);
+      });
+
+      frame.src = SO_APP_URL;
     })();
   </script>
 </body>
