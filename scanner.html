@@ -127,9 +127,14 @@
       requestFullscreenSafe();
       // Sebagian browser mobile hanya mengizinkan requestFullscreen kalau
       // dipicu langsung dari gesture user (tap), bukan otomatis saat
-      // halaman dibuka. Sebagai fallback, tap pertama di layar juga akan
-      // mencoba masuk fullscreen.
-      document.body.addEventListener('click', requestFullscreenSafe, { once: true });
+      // halaman dibuka. Sebagai fallback, tap pertama DI LUAR area video
+      // (mis. di tulisan hint bawah) juga akan mencoba masuk fullscreen.
+      // Sengaja TIDAK ditumpuk di listener tap-to-focus milik video (lihat
+      // di bawah) supaya tap untuk fokus kamera tidak sekaligus memicu
+      // notifikasi "keluar dari layar penuh" milik Chrome — dua gesture
+      // itu dipisah biar jelas mana yang ngapain.
+      document.getElementById('header').addEventListener('click', requestFullscreenSafe, { once: true });
+      document.getElementById('msg').addEventListener('click', requestFullscreenSafe, { once: true });
 
       if (typeof Html5Qrcode === 'undefined') {
         msgEl.textContent = 'Library kamera gagal dimuat. Cek koneksi internet.';
@@ -160,17 +165,6 @@
                                  // lebih lebar, membantu barcode besar/dekat
                                  // tetap seluruhnya masuk frame.
         disableFlip: false,
-        // PENTING: resolusi/advanced constraints HARUS lewat sini
-        // (config.videoConstraints), BUKAN dicampur ke argumen pertama
-        // qrReader.start() — argumen pertama cuma boleh 1 key kalau
-        // berupa object (mis. { facingMode: ... } saja), kalau lebih dari
-        // 1 key library ini melempar error "cameraIdOrConfig object
-        // should have exactly 1 key".
-        videoConstraints: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -181,6 +175,13 @@
         ]
       };
 
+      // SENGAJA hanya { facingMode: 'environment' } — 1 key saja. Ini
+      // argumen "cameraIdOrConfig" milik html5-qrcode, BUKAN tempat untuk
+      // resolusi/constraints tambahan; kalau ditambah key lain (width,
+      // height, advanced, dst) library akan melempar error
+      // "cameraIdOrConfig object should have exactly 1 key". Resolusi
+      // kamera dibiarkan default browser (biasanya sudah cukup tinggi di
+      // HP modern) — lebih aman daripada resiko error total.
       var cameraIdOrConfig = { facingMode: 'environment' };
 
       qrReader.start(
