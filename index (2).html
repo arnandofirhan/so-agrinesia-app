@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Stock Opname — Agrinesia</title>
+
+  <!-- ===================== GANTI INI ===================== -->
+  <!-- Ganti URL di bawah dengan URL /exec Web App Stock Opname kamu.
+       Contoh: https://script.google.com/macros/s/AKfycb.../exec -->
+  <script>
+    var SO_APP_URL = "GANTI_DENGAN_URL_EXEC_KAMU";
+  </script>
+  <!-- ======================================================== -->
+
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f4d2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Stock Opname">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #0f4d2e;
+    }
+    #appFrame {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+    /* Splash sederhana selagi iframe app SO memuat, supaya tidak
+       terlihat layar kosong hijau polos tanpa keterangan. */
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: #0f4d2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      z-index: 2;
+      transition: opacity 0.25s ease;
+    }
+    #splash img {
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+    }
+    #splash .txt {
+      font-size: 15px;
+      opacity: 0.85;
+    }
+    #splash.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="splash">
+    <img src="icon-192.png" alt="Stock Opname">
+    <div class="txt">Memuat Stock Opname…</div>
+  </div>
+  <iframe id="appFrame" title="Stock Opname" allow="clipboard-write"></iframe>
+
+  <script>
+    (function () {
+      var frame = document.getElementById('appFrame');
+      var splash = document.getElementById('splash');
+
+      if (!SO_APP_URL || SO_APP_URL.indexOf('GANTI_DENGAN_URL_EXEC_KAMU') !== -1) {
+        splash.innerHTML = '<div class="txt" style="max-width:80%;text-align:center;line-height:1.5;">'
+          + 'URL app belum diisi.<br>Edit index.html, ganti nilai <b>SO_APP_URL</b> '
+          + 'dengan URL /exec Web App Stock Opname kamu.</div>';
+        return;
+      }
+
+      frame.addEventListener('load', function () {
+        splash.classList.add('hide');
+        setTimeout(function () { splash.style.display = 'none'; }, 300);
+      });
+
+      frame.src = SO_APP_URL;
+    })();
+  </script>
+</body>
+</html>
