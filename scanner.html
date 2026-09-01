@@ -26,16 +26,48 @@
   }
   #reader { position: fixed; inset: 0; }
   #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+  /* Sembunyikan kotak qrbox bawaan library — kita gantikan dengan overlay
+     custom yang lebih LEBAR (mengikuti bentuk barcode 1D: pendek & lebar),
+     supaya user tidak perlu maju-mundur presisi untuk pas-in barcode ke
+     kotak sempit bawaan. */
+  #reader > div:first-child > div:first-child { border: none !important; }
+  #scanGuide {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 86vw; max-width: 480px; height: 34vw; max-height: 190px;
+    border: 3px solid rgba(255,255,255,0.9);
+    border-radius: 14px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    z-index: 1; pointer-events: none;
+  }
+  #scanGuide::before, #scanGuide::after {
+    content: ''; position: absolute; width: 26px; height: 26px;
+    border-color: #4ade80; border-style: solid; border-width: 0;
+  }
+  #scanGuide .corner { position: absolute; width: 26px; height: 26px; }
+  #scanGuide .tl { top: -3px; left: -3px; border-top: 4px solid #4ade80; border-left: 4px solid #4ade80; border-radius: 14px 0 0 0; }
+  #scanGuide .tr { top: -3px; right: -3px; border-top: 4px solid #4ade80; border-right: 4px solid #4ade80; border-radius: 0 14px 0 0; }
+  #scanGuide .bl { bottom: -3px; left: -3px; border-bottom: 4px solid #4ade80; border-left: 4px solid #4ade80; border-radius: 0 0 0 14px; }
+  #scanGuide .br { bottom: -3px; right: -3px; border-bottom: 4px solid #4ade80; border-right: 4px solid #4ade80; border-radius: 0 0 14px 0; }
   #msg {
     position: fixed; left: 0; right: 0; bottom: 0;
     padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
     background: rgba(15,77,46,0.92); color: #fff; font-size: 13px; text-align: center; z-index: 2;
+  }
+  #tapFocusHint {
+    position: fixed; left: 0; right: 0; bottom: 56px;
+    text-align: center; color: rgba(255,255,255,0.75); font-size: 11.5px;
+    z-index: 2; padding: 0 16px; pointer-events: none;
   }
 </style>
 </head>
 <body>
   <div id="header"><span class="ttl">Scan Barcode</span><button id="closeBtn">✕</button></div>
   <div id="reader"></div>
+  <div id="scanGuide">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+  </div>
+  <div id="tapFocusHint">Tap layar untuk fokus ulang kalau gambar buram</div>
   <div id="msg">Arahkan kamera ke barcode…</div>
 
   <script>
@@ -51,7 +83,18 @@
         } catch (e) { /* no-op */ }
       }
 
+      function exitFullscreenSafe() {
+        try {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(function () {});
+          } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        } catch (e) { /* no-op */ }
+      }
+
       function stopAndClose(sendCancel) {
+        exitFullscreenSafe();
         if (qrReader) {
           try {
             qrReader.stop().then(function () {
@@ -68,6 +111,26 @@
 
       closeBtn.addEventListener('click', function () { stopAndClose(true); });
 
+      // Minta fullscreen supaya address bar Chrome ikut hilang selagi
+      // scan (browser tetap menampilkannya sebentar di awal — itu bagian
+      // dari UI Chrome sendiri yang tidak bisa dihilangkan lewat kode,
+      // tapi begitu masuk fullscreen dia otomatis sembunyi). Gagal minta
+      // fullscreen (mis. tidak didukung / diblokir gesture policy) tidak
+      // fatal, kamera tetap jalan seperti biasa.
+      function requestFullscreenSafe() {
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+        if (req) {
+          try { req.call(el).catch(function () {}); } catch (e) { /* no-op */ }
+        }
+      }
+      requestFullscreenSafe();
+      // Sebagian browser mobile hanya mengizinkan requestFullscreen kalau
+      // dipicu langsung dari gesture user (tap), bukan otomatis saat
+      // halaman dibuka. Sebagai fallback, tap pertama di layar juga akan
+      // mencoba masuk fullscreen.
+      document.body.addEventListener('click', requestFullscreenSafe, { once: true });
+
       if (typeof Html5Qrcode === 'undefined') {
         msgEl.textContent = 'Library kamera gagal dimuat. Cek koneksi internet.';
         send({ type: 'so_scan_error', message: 'Library kamera (html5-qrcode) gagal dimuat.' });
@@ -75,9 +138,28 @@
       }
 
       qrReader = new Html5Qrcode('reader', false);
+
+      // qrbox mengikuti proporsi barcode 1D (pendek & lebar) supaya area
+      // pindai lebih toleran terhadap jarak kamera ke barang — sebelumnya
+      // kotak 260x160 (hampir persegi) terlalu sempit untuk barcode
+      // panjang, jadi user harus mundur pas-pasan supaya semua bar masuk
+      // kotak. Ukuran sekarang dihitung relatif ke layar (bukan angka
+      // tetap) supaya proporsional di HP dengan ukuran layar berbeda-beda.
+      function computeQrbox(viewfinderWidth, viewfinderHeight) {
+        var w = Math.round(Math.min(viewfinderWidth * 0.86, 480));
+        var h = Math.round(Math.min(viewfinderHeight * 0.4, w * 0.4));
+        return { width: w, height: Math.max(h, 110) };
+      }
+
       var config = {
-        fps: 10,
-        qrbox: { width: 260, height: 160 },
+        fps: 8, // sedikit lebih rendah dari 10: beri waktu kamera HP
+                // menyelesaikan autofocus antar-frame, jadi bar barcode
+                // tidak "setengah blur" saat prosesnya membaca gambar.
+        qrbox: computeQrbox,
+        aspectRatio: 1.7777778, // dorong stream mendekati 16:9 agar FOV
+                                 // lebih lebar, membantu barcode besar/dekat
+                                 // tetap seluruhnya masuk frame.
+        disableFlip: false,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -88,8 +170,20 @@
         ]
       };
 
+      var videoConstraints = {
+        facingMode: 'environment',
+        // Minta resolusi lebih tinggi dari default (biasanya ~640x480 di
+        // banyak browser mobile) supaya bar tipis pada barcode tetap
+        // terbaca jelas walau difoto agak jauh. Browser akan otomatis
+        // turun ke resolusi terdekat yang didukung kalau kamera tidak
+        // mendukung nilai ideal ini.
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      };
+
       qrReader.start(
-        { facingMode: 'environment' },
+        videoConstraints,
         config,
         function onScanSuccess(decodedText) {
           if (busy) return;
@@ -99,7 +193,32 @@
           setTimeout(function () { stopAndClose(false); }, 300);
         },
         function onScanFailure() { /* normal, diamkan */ }
-      ).catch(function (err) {
+      ).then(function () {
+        // Tap-to-focus: beberapa HP tidak otomatis re-fokus saat objek
+        // berubah jarak mendadak (mis. dari cek email lalu langsung
+        // hadap kamera dekat barang). applyConstraints dengan
+        // pointsOfInterest memicu kamera fokus ulang ke titik yang
+        // ditap user. Kalau browser tidak mendukung, ini gagal senyap
+        // (try/catch) dan tidak mengganggu fungsi utama.
+        var videoEl = document.querySelector('#reader video');
+        if (videoEl) {
+          videoEl.addEventListener('click', function (e) {
+            try {
+              var track = videoEl.srcObject && videoEl.srcObject.getVideoTracks()[0];
+              if (!track) return;
+              var caps = track.getCapabilities ? track.getCapabilities() : {};
+              if (caps && caps.focusMode && caps.focusMode.indexOf('single-shot') !== -1) {
+                var rect = videoEl.getBoundingClientRect();
+                var x = (e.clientX - rect.left) / rect.width;
+                var y = (e.clientY - rect.top) / rect.height;
+                track.applyConstraints({
+                  advanced: [{ focusMode: 'single-shot', pointsOfInterest: [{ x: x, y: y }] }]
+                }).catch(function () {});
+              }
+            } catch (err) { /* browser tidak dukung, abaikan */ }
+          });
+        }
+      }).catch(function (err) {
         var name = err && err.name;
         var m;
         if (name === 'NotAllowedError') {
