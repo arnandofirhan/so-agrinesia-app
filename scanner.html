@@ -216,7 +216,6 @@
 <body>
   <div id="header"><span class="ttl">Scan Barcode</span><button id="closeBtn">✕</button></div>
   <div id="reader"></div>
-  <div id="scanStatusBadge"></div>
   <div id="scanGuide" class="state-idle">
     <div class="frame"></div>
     <div class="laser"></div>
@@ -232,7 +231,6 @@
       var hintEl = document.getElementById('tapFocusHint');
       var closeBtn = document.getElementById('closeBtn');
       var guideEl = document.getElementById('scanGuide');
-      var badgeEl = document.getElementById('scanStatusBadge');
       var qrReader = null;
       // "busy" menahan scan barcode BARU selagi hasil scan sebelumnya masih
       // diproses (nunggu jawaban dari app: ditemukan / tidak / error) —
@@ -249,23 +247,15 @@
         } catch (e) { /* no-op */ }
       }
 
-      // ---- Visual state kotak scan + badge (MURNI TAMPILAN) --------------
+      // ---- Visual state kotak scan (MURNI TAMPILAN) ----------------------
       // Tidak menyentuh flow sama sekali: hanya mengganti class CSS pada
-      // #scanGuide dan isi #scanStatusBadge mengikuti kind yang SUDAH ADA
-      // di alur pesan (checking / success / error / idle).
-      function setGuideState(kind, label) {
+      // #scanGuide mengikuti kind yang SUDAH ADA di alur pesan (checking /
+      // success / error / idle). Pesan teksnya sendiri cukup tampil satu
+      // kali saja di bar bawah (#msg) — badge terpisah di atas kotak sudah
+      // dihapus karena dobel dengan bar bawah dan menutupi kamera.
+      function setGuideState(kind) {
         guideEl.className = 'state-' + kind;
         if (guideResetTimer) { clearTimeout(guideResetTimer); guideResetTimer = null; }
-
-        if (kind === 'idle') {
-          badgeEl.className = '';
-          badgeEl.textContent = '';
-          return;
-        }
-
-        var icon = kind === 'checking' ? '⏳' : kind === 'success' ? '✓' : '⚠';
-        badgeEl.textContent = icon + ' ' + label;
-        badgeEl.className = 'badge-' + kind + ' show';
 
         if (kind === 'success' || kind === 'error') {
           guideResetTimer = setTimeout(function () {
