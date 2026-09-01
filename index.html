@@ -68,65 +68,7 @@
       opacity: 0;
       pointer-events: none;
     }
-
-    /* ===== Overlay kamera Scan Barcode (bridge untuk app SO) =====
-       Apps Script HtmlService selalu merender app SO di iframe sandbox
-       ber-origin opaque, dan browser memblokir getUserMedia() dari origin
-       semacam itu (dikonfirmasi resmi oleh dokumentasi Google Apps Script,
-       bagian "Permissions policy violation" — ini "by design", bukan bug).
-       Karena itu kamera dijalankan DI SINI (wrapper, origin HTTPS asli
-       GitHub Pages, jadi getUserMedia diizinkan normal), lalu hasil scan
-       dikirim balik ke app SO lewat postMessage. Lihat listener di bawah. */
-    #scanOverlay {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      background: #000;
-      display: none;
-      flex-direction: column;
-    }
-    #scanOverlay.show { display: flex; }
-    #scanOverlayHeader {
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      padding-top: max(14px, env(safe-area-inset-top));
-      background: #0f4d2e;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    #scanOverlayHeader .ttl { font-size: 15px; font-weight: 600; }
-    #scanOverlayCloseBtn {
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: rgba(255,255,255,0.15);
-      color: #fff;
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
-    }
-    #scanOverlayReader {
-      flex: 1 1 auto;
-      width: 100%;
-      background: #000;
-    }
-    #scanOverlayReader video { width: 100% !important; height: 100% !important; object-fit: cover; }
-    #scanOverlayMsg {
-      flex: 0 0 auto;
-      padding: 10px 16px;
-      padding-bottom: max(10px, env(safe-area-inset-bottom));
-      font-size: 13px;
-      color: #fff;
-      background: #0f4d2e;
-      text-align: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      min-height: 16px;
-    }
   </style>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <div id="splash">
@@ -154,15 +96,6 @@
   -->
   <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read"></iframe>
 
-  <div id="scanOverlay">
-    <div id="scanOverlayHeader">
-      <span class="ttl">Scan Barcode</span>
-      <button id="scanOverlayCloseBtn" type="button" aria-label="Tutup">✕</button>
-    </div>
-    <div id="scanOverlayReader"></div>
-    <div id="scanOverlayMsg">Arahkan kamera ke barcode…</div>
-  </div>
-
   <script>
     (function () {
       var frame = document.getElementById('appFrame');
@@ -181,115 +114,6 @@
       });
 
       frame.src = SO_APP_URL;
-    })();
-  </script>
-
-  <script>
-    // ===== Bridge kamera untuk fitur Scan Barcode app SO =====
-    (function () {
-      var frame = document.getElementById('appFrame');
-      var overlay = document.getElementById('scanOverlay');
-      var msgEl = document.getElementById('scanOverlayMsg');
-      var closeBtn = document.getElementById('scanOverlayCloseBtn');
-      var qrReader = null;
-      var busy = false; // cegah 1 barcode ke-trigger berkali-kali sebelum overlay sempat ditutup
-
-      function postToApp(payload) {
-        try {
-          if (frame && frame.contentWindow) frame.contentWindow.postMessage(payload, '*');
-        } catch (e) { /* no-op */ }
-      }
-
-      function setMsg(text) {
-        if (msgEl) msgEl.textContent = text;
-      }
-
-      function stopReader() {
-        if (qrReader) {
-          try {
-            qrReader.stop().then(function () {
-              try { qrReader.clear(); } catch (e) {}
-            }).catch(function () { /* kamera mungkin sudah berhenti sendiri */ });
-          } catch (e) { /* no-op */ }
-          qrReader = null;
-        }
-      }
-
-      function closeOverlay(sendCancel) {
-        stopReader();
-        overlay.classList.remove('show');
-        busy = false;
-        if (sendCancel) postToApp({ type: 'so_scan_cancel' });
-      }
-
-      function openOverlay() {
-        if (typeof Html5Qrcode === 'undefined') {
-          postToApp({ type: 'so_scan_error', message: 'Library kamera (html5-qrcode) gagal dimuat. Cek koneksi internet lalu coba lagi.' });
-          return;
-        }
-        busy = false;
-        setMsg('Arahkan kamera ke barcode…');
-        overlay.classList.add('show');
-
-        qrReader = new Html5Qrcode('scanOverlayReader', /* verbose= */ false);
-        var config = {
-          fps: 10,
-          qrbox: { width: 260, height: 160 },
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.QR_CODE
-          ]
-        };
-
-        qrReader.start(
-          { facingMode: 'environment' },
-          config,
-          function onScanSuccess(decodedText) {
-            if (busy) return;
-            busy = true;
-            setMsg('Barcode terbaca: ' + decodedText);
-            postToApp({ type: 'so_scan_result', barcode: decodedText });
-            // Tutup overlay sebentar setelah berhasil supaya user lihat
-            // konfirmasi dulu, lalu siap discan lagi kalau modal dibuka lagi.
-            setTimeout(function () {
-              closeOverlay(false);
-            }, 350);
-          },
-          function onScanFailure() { /* frame tanpa barcode terbaca — normal */ }
-        ).catch(function (err) {
-          var name = err && err.name;
-          var msg;
-          if (name === 'NotAllowedError') {
-            msg = 'Akses kamera ditolak. Buka Pengaturan HP → Aplikasi → Chrome → Izin → Kamera → pastikan Diizinkan, lalu buka lagi aplikasi ini dari ikon di layar utama.';
-          } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-            msg = 'Kamera belakang tidak ditemukan di perangkat ini.';
-          } else if (name === 'NotReadableError') {
-            msg = 'Kamera sedang dipakai aplikasi lain. Tutup aplikasi kamera/video call lain, lalu coba lagi.';
-          } else {
-            msg = 'Tidak bisa mengakses kamera: ' + (err && err.message ? err.message : err) + '.';
-          }
-          overlay.classList.remove('show');
-          postToApp({ type: 'so_scan_error', message: msg });
-        });
-      }
-
-      closeBtn.addEventListener('click', function () {
-        closeOverlay(true);
-      });
-
-      window.addEventListener('message', function (event) {
-        var data = event && event.data;
-        if (!data || typeof data !== 'object') return;
-        if (data.type === 'so_scan_request') {
-          openOverlay();
-        } else if (data.type === 'so_scan_stop') {
-          closeOverlay(false);
-        }
-      });
     })();
   </script>
 </body>
