@@ -13,6 +13,18 @@
   </script>
   <!-- ======================================================== -->
 
+  <!-- PERCEPAT LOADING: buka koneksi (DNS + TLS handshake) ke domain
+       script.google.com dan googleusercontent.com (tempat isi app SO
+       akhirnya di-serve setelah redirect /exec) SEDINI mungkin, sebelum
+       iframe sempat diminta. Browser jadi sudah "siap sambung" duluan,
+       memotong sebagian waktu yang biasanya baru mulai begitu iframe.src
+       diisi lewat JS di bawah — mempercepat splash "Memuat aplikasi..."
+       tanpa mengubah proses loading app SO itu sendiri sama sekali. -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="https://script.googleusercontent.com">
+
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f4d2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -58,7 +70,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       z-index: 2;
       background: radial-gradient(120% 120% at 50% 15%, #16653c 0%, #0f4d2e 45%, #0a3a22 100%);
-      transition: opacity 0.4s ease, transform 0.4s ease;
+      transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
     /* Beberapa blob cahaya lembut yang mengambang pelan di background,
@@ -221,7 +233,7 @@
     getUserMedia()/Html5Qrcode di dalamnya. Ditambahkan camera & microphone
     di bawah.
   -->
-  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read"></iframe>
+  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read" fetchpriority="high" loading="eager"></iframe>
 
   <script>
     (function () {
@@ -237,9 +249,20 @@
 
       frame.addEventListener('load', function () {
         splash.classList.add('hide');
-        setTimeout(function () { splash.style.display = 'none'; }, 300);
+        // Delay penghapusan splash dari layout dipangkas (300ms -> 180ms,
+        // mengikuti durasi transisi #splash.hide yang juga sudah 0.4s->
+        // dipercepat) supaya transisi ke app terasa lebih sigap, bukan
+        // menunggu lama padahal app sebenarnya sudah selesai dimuat.
+        setTimeout(function () { splash.style.display = 'none'; }, 180);
       });
 
+      // Set src SESEGERA MUNGKIN (baris ini, bukan ditunda lewat
+      // requestAnimationFrame/setTimeout/DOMContentLoaded) — begitu skrip
+      // ini jalan, permintaan jaringan ke SO_APP_URL langsung ditembakkan.
+      // Dikombinasikan dengan <link rel="preconnect"> di <head>, koneksi
+      // TLS ke script.google.com biasanya sudah "siap" duluan sebelum
+      // baris ini sempat berjalan, sehingga permintaan pertama tidak lagi
+      // menunggu DNS+handshake dari nol.
       frame.src = SO_APP_URL;
     })();
   </script>
