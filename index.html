@@ -5,10 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Stock Opname — Agrinesia</title>
 
+  <!-- ===================== GANTI INI ===================== -->
+  <!-- Ganti URL di bawah dengan URL /exec Web App Stock Opname kamu.
+       Contoh: https://script.google.com/macros/s/AKfycb.../exec -->
   <script>
     var SO_APP_URL = "https://script.google.com/a/macros/agrinesia.co.id/s/AKfycbyHxJXf9BME1mIEyo9ZxjH0y-MxvK2EMkM1CQRabMhGbn02eOCwOyyy2GglnhV4spJSeQ/exec";
   </script>
+  <!-- ======================================================== -->
 
+  <!-- PERCEPAT LOADING: buka koneksi (DNS + TLS handshake) ke domain
+       script.google.com dan googleusercontent.com (tempat isi app SO
+       akhirnya di-serve setelah redirect /exec) SEDINI mungkin, sebelum
+       iframe sempat diminta. Browser jadi sudah "siap sambung" duluan,
+       memotong sebagian waktu yang biasanya baru mulai begitu iframe.src
+       diisi lewat JS di bawah — mempercepat splash "Memuat aplikasi..."
+       tanpa mengubah proses loading app SO itu sendiri sama sekali. -->
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
@@ -28,26 +39,24 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      height: 100dvh;
       overflow: hidden;
       background: #0f4d2e;
     }
-    /* iframe TETAP fullscreen edge-to-edge (tidak dimundurkan dari sisi
-       manapun) supaya tampilan tetap mulus, bukan "mengambang" dengan
-       bingkai. Info notch dikirim ke DALAM iframe lewat postMessage
-       (lihat script di bawah) supaya app di dalamnya bisa menyesuaikan
-       topbar/bottom-nav sendiri — bukan lewat CSS env() di shell ini,
-       yang kalau dipakai untuk memundurkan iframe malah bikin app
-       kelihatan berbingkai/kepotong dari tampilan (feedback user). */
     #appFrame {
       position: fixed;
-      inset: 0;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       border: 0;
       display: block;
     }
 
+    /* ===================== SPLASH SCREEN ===================== */
+    /* Splash modern selagi iframe app SO memuat: gradient bergerak halus,
+       logo dengan efek glow + pulse, ring loading, dan teks fade/shimmer.
+       Semua CSS-only (tidak ada library tambahan) supaya tetap ringan
+       dan tidak nambah request network sebelum app SO sendiri kebuka. */
     #splash {
       position: fixed;
       inset: 0;
@@ -64,6 +73,8 @@
       transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
+    /* Beberapa blob cahaya lembut yang mengambang pelan di background,
+       biar tidak terasa flat/statis. Murni dekoratif. */
     #splash::before,
     #splash::after {
       content: "";
@@ -106,6 +117,9 @@
       z-index: 1;
     }
 
+    /* Ring loading yang berputar mengelilingi logo, dengan gradient
+       trail (bukan solid arc) supaya terasa lebih premium & bukan
+       spinner generik. */
     #splash .spin-ring {
       position: absolute;
       inset: -14px;
@@ -125,6 +139,11 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Glow lembut berdenyut di belakang logo — kini beririsan dengan
+       glow bawaan icon PNG sendiri (icon-any-*.png sudah punya soft
+       glow terpahat di filenya), sehingga transisi dari native splash
+       Android ke splash custom ini nyaris tak terlihat sebagai "loncatan
+       gaya" karena keduanya sama-sama menampilkan logo yang "menyala". */
     #splash .logo-glow {
       position: absolute;
       inset: -6px;
@@ -180,6 +199,8 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
+    /* Titik-titik "..." yang berkedip bergantian, dipisah dari teks
+       supaya lebih hidup daripada teks statis "Memuat...". */
     #splash .txt .dot {
       animation: dotBlink 1.4s ease-in-out infinite;
       opacity: 0.2;
@@ -211,6 +232,25 @@
       <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
     </div>
   </div>
+  <!--
+    PENTING soal kamera: JANGAN ganti ini jadi navigasi top-level
+    (window.location = SO_APP_URL). App SO (JavaScript.html, fungsi
+    isRunningAsPwa()) SENGAJA mengecek window.matchMedia('(display-mode:
+    standalone)') pada TOP-LEVEL window untuk memutuskan apakah fitur Scan
+    Barcode boleh dipakai. Kalau top-level window dinavigasi keluar dari
+    origin/scope PWA ini (ke script.google.com), Android/Chrome keluar dari
+    mode standalone WebAPK, display-mode berubah, dan app SO otomatis
+    mengunci fitur scan (nampilin modal "Install Aplikasi Dulu") — walau
+    sebenarnya app sudah ter-install. Makanya HARUS tetap iframe, supaya
+    top-level document (index.html di GitHub Pages ini) yang tetap
+    standalone, sementara isi app SO dimuat di iframe di dalamnya.
+
+    Yang sebelumnya kurang: atribut "allow" pada iframe ini TIDAK
+    menyertakan "camera" (cuma clipboard-write), sehingga browser
+    memblokir permission delegation ke iframe SEBELUM sempat sampai ke
+    getUserMedia()/Html5Qrcode di dalamnya. Ditambahkan camera & microphone
+    di bawah.
+  -->
   <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read" fetchpriority="high" loading="eager"></iframe>
 
   <script>
@@ -227,52 +267,20 @@
 
       frame.addEventListener('load', function () {
         splash.classList.add('hide');
+        // Delay penghapusan splash dari layout dipangkas (300ms -> 180ms,
+        // mengikuti durasi transisi #splash.hide yang juga sudah 0.4s->
+        // dipercepat) supaya transisi ke app terasa lebih sigap, bukan
+        // menunggu lama padahal app sebenarnya sudah selesai dimuat.
         setTimeout(function () { splash.style.display = 'none'; }, 180);
-        sendSafeAreaToFrame();
       });
 
-      // Kirim ukuran notch/Dynamic Island/home-indicator device ke DALAM
-      // iframe lewat postMessage — cara ini dipakai karena browser tidak
-      // pernah menyalurkan env(safe-area-inset-*) ke iframe cross-origin
-      // secara otomatis (pembatasan keamanan browser). Shell ini (sebagai
-      // dokumen top-level yang benar-benar terhubung ke device) BISA
-      // membaca nilai aslinya lewat elemen bantu tak-terlihat yang
-      // ukurannya diatur via env(), lalu diteruskan sebagai angka biasa.
-      // App di dalam iframe (JavaScript.html) perlu menangkap pesan ini
-      // dan mengeset CSS variable, misalnya document.documentElement.
-      // style.setProperty('--safe-top', px + 'px'), lalu Stylesheet.html
-      // memakai var(--safe-top, 0px) di topbar/bottom-nav alih-alih
-      // env(safe-area-inset-top) yang tidak akan pernah terbaca di sana.
-      var safeAreaProbe = document.createElement('div');
-      safeAreaProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;' +
-        'padding-top:env(safe-area-inset-top,0px);' +
-        'padding-bottom:env(safe-area-inset-bottom,0px);' +
-        'padding-left:env(safe-area-inset-left,0px);' +
-        'padding-right:env(safe-area-inset-right,0px);' +
-        'pointer-events:none;visibility:hidden;';
-      document.body.appendChild(safeAreaProbe);
-
-      function sendSafeAreaToFrame() {
-        var cs = getComputedStyle(safeAreaProbe);
-        var payload = {
-          type: 'so_safe_area',
-          top: parseFloat(cs.paddingTop) || 0,
-          bottom: parseFloat(cs.paddingBottom) || 0,
-          left: parseFloat(cs.paddingLeft) || 0,
-          right: parseFloat(cs.paddingRight) || 0
-        };
-        try {
-          frame.contentWindow.postMessage(payload, '*');
-        } catch (e) { /* no-op, cross-origin belum siap / iframe belum load */ }
-      }
-      // Kirim ulang saat orientasi berubah (nilai notch bisa berbeda
-      // landscape vs portrait di beberapa device) & sesaat setelah load
-      // (jaga-jaga app di dalam iframe baru pasang listener belakangan).
-      window.addEventListener('orientationchange', function () {
-        setTimeout(sendSafeAreaToFrame, 300);
-      });
-      setTimeout(sendSafeAreaToFrame, 800);
-
+      // Set src SESEGERA MUNGKIN (baris ini, bukan ditunda lewat
+      // requestAnimationFrame/setTimeout/DOMContentLoaded) — begitu skrip
+      // ini jalan, permintaan jaringan ke SO_APP_URL langsung ditembakkan.
+      // Dikombinasikan dengan <link rel="preconnect"> di <head>, koneksi
+      // TLS ke script.google.com biasanya sudah "siap" duluan sebelum
+      // baris ini sempat berjalan, sehingga permintaan pertama tidak lagi
+      // menunggu DNS+handshake dari nol.
       frame.src = SO_APP_URL;
     })();
   </script>
