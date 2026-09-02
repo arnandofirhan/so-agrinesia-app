@@ -42,6 +42,27 @@
       overflow: hidden;
       background: #0f4d2e;
     }
+    /* ===== Pengukur safe-area (notch/Dynamic Island/home-indicator) =====
+       Dokumen INI (top-level, bukan di dalam iframe) yang bisa membaca
+       env(safe-area-inset-*) dengan benar di Safari iOS — app SO di
+       dalam iframe TIDAK BISA membacanya sendiri (batasan keamanan
+       iframe cross-origin script.google.com/googleusercontent.com).
+       #safeAreaProbe murni elemen bantu 0x0 supaya JS bisa "mengintip"
+       nilai env() lewat getComputedStyle (env() tidak bisa dibaca
+       langsung dari JS), lalu nilainya dikirim ke iframe lewat
+       postMessage (lihat script di bawah). Tidak terlihat & tidak
+       memengaruhi layout apa pun. */
+    #safeAreaProbe {
+      position: fixed;
+      top: env(safe-area-inset-top, 0px);
+      right: env(safe-area-inset-right, 0px);
+      bottom: env(safe-area-inset-bottom, 0px);
+      left: env(safe-area-inset-left, 0px);
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      visibility: hidden;
+    }
     #appFrame {
       position: fixed;
       top: 0;
@@ -220,6 +241,7 @@
   </style>
 </head>
 <body>
+  <div id="safeAreaProbe"></div>
   <div id="splash">
     <div class="logo-wrap">
       <div class="spin-ring"></div>
@@ -282,6 +304,54 @@
       // baris ini sempat berjalan, sehingga permintaan pertama tidak lagi
       // menunggu DNS+handshake dari nol.
       frame.src = SO_APP_URL;
+
+      // ===== Kirim safe-area ke app SO di dalam iframe =====
+      // App SO (JavaScript.html) sudah punya listener 'message' yang
+      // menunggu { type: 'so_safe_area', top, bottom, left, right } untuk
+      // mengisi padding notch/Dynamic Island/home-indicator di iPhone —
+      // TAPI sebelumnya shell ini (index.html) tidak pernah benar-benar
+      // mengirim pesan itu, jadi nilainya selalu 0 dan topbar/bottom-nav
+      // app SO mepet ke notch/status-bar (dilaporkan user, tampilan
+      // "berantakan" khusus di iPhone). Fungsi di bawah membaca
+      // #safeAreaProbe (lihat CSS di atas) lalu mem-postMessage-kan
+      // nilainya ke iframe SETIAP kali ukurannya mungkin berubah (load
+      // awal, resize, ganti orientasi, splash hilang) supaya app SO
+      // selalu punya nilai terbaru & akurat.
+      function sendSafeArea() {
+        try {
+          var cs = getComputedStyle(document.getElementById('safeAreaProbe'));
+          var payload = {
+            type: 'so_safe_area',
+            top: parseFloat(cs.top) || 0,
+            right: parseFloat(cs.right) || 0,
+            bottom: parseFloat(cs.bottom) || 0,
+            left: parseFloat(cs.left) || 0
+          };
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage(payload, '*');
+          }
+        } catch (e) { /* aman diabaikan — tidak boleh sampai memutus app */ }
+      }
+
+      // Kirim segera setelah iframe selesai load (kondisi paling penting —
+      // saat itulah app SO baru siap menerima & memasang listener-nya),
+      // lalu ulangi beberapa kali di detik-detik awal untuk jaga-jaga app
+      // SO belum sempat pasang listener persis saat pesan pertama tiba
+      // (race condition kecil antar dua dokumen berbeda).
+      frame.addEventListener('load', function () {
+        sendSafeArea();
+        setTimeout(sendSafeArea, 300);
+        setTimeout(sendSafeArea, 1000);
+        setTimeout(sendSafeArea, 2000);
+      });
+
+      // Ganti orientasi (potrait <-> landscape) mengubah nilai
+      // safe-area-inset-left/right vs top/bottom di iPhone (notch pindah
+      // sisi) — kirim ulang supaya app SO ikut menyesuaikan.
+      window.addEventListener('resize', sendSafeArea);
+      window.addEventListener('orientationchange', function () {
+        setTimeout(sendSafeArea, 300);
+      });
     })();
   </script>
 </body>
