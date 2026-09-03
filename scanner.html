@@ -220,7 +220,15 @@
 
       function send(payload) {
         try {
-          if (window.opener) window.opener.postMessage(payload, '*');
+          if (window.opener) {
+            window.opener.postMessage(payload, '*');
+          } else if (window.parent && window.parent !== window) {
+            // Mode overlay iframe (khusus iPhone, lihat startScanBarcodeCamera
+            // di JavaScript.html) — tidak ada window.opener karena ini bukan
+            // popup, jadi kirim ke window.parent (app yang menyisipkan
+            // iframe ini) supaya hasil scan tetap sampai.
+            window.parent.postMessage(payload, '*');
+          }
         } catch (e) { /* no-op */ }
       }
 
@@ -292,6 +300,19 @@
         } catch (e) { /* no-op */ }
       }
 
+      // Kalau jendela ini popup asli (window.opener ada), dia boleh
+      // menutup dirinya sendiri lewat window.close() seperti semula.
+      // Kalau ini overlay iframe (mode iPhone, tidak ada window.opener),
+      // window.close() tidak berlaku untuk iframe — cukup kirim pesan,
+      // parent (app) yang akan melepas elemen iframe-nya sendiri
+      // (lihat handler so_scan_cancel / stopScanBarcodeCamera di
+      // JavaScript.html).
+      function closeSelfIfPopup() {
+        if (window.opener) {
+          try { window.close(); } catch (e) { /* no-op */ }
+        }
+      }
+
       function stopAndClose(sendCancel) {
         exitFullscreenSafe();
         if (qrReader) {
@@ -299,12 +320,18 @@
             qrReader.stop().then(function () {
               try { qrReader.clear(); } catch (e) {}
               if (sendCancel) send({ type: 'so_scan_cancel' });
-              window.close();
-            }).catch(function () { window.close(); });
-          } catch (e) { window.close(); }
+              closeSelfIfPopup();
+            }).catch(function () {
+              if (sendCancel) send({ type: 'so_scan_cancel' });
+              closeSelfIfPopup();
+            });
+          } catch (e) {
+            if (sendCancel) send({ type: 'so_scan_cancel' });
+            closeSelfIfPopup();
+          }
         } else {
           if (sendCancel) send({ type: 'so_scan_cancel' });
-          window.close();
+          closeSelfIfPopup();
         }
       }
 
