@@ -54,35 +54,58 @@
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.googleusercontent.com">
 
-  <!-- Logo.html: file sama persis dari proyek Apps Script kamu yang lama,
-       TIDAK diubah isinya. Ini sintaks JS (mendefinisikan AGRINESIA_LOGO_B64),
-       jadi <script src> tetap jalan normal walau ekstensinya .html. -->
-  <script src="Logo.html"></script>
-
-  <!-- Stylesheet.html: TIDAK BISA dimuat lewat <link rel="stylesheet">
-       biasa — GitHub Pages mengirim file .html dengan Content-Type:
-       text/html, dan Chrome/Firefox MENOLAK menerapkan <link
-       rel="stylesheet"> kalau MIME type-nya bukan text/css (strict MIME
-       checking), walau isinya CSS valid. Makanya diambil manual lewat
-       XMLHttpRequest lalu disuntik sebagai elemen <style> — cara ini
-       tidak peduli sama sekali soal Content-Type/MIME dari server.
-       Dibuat SYNCHRONOUS (xhr.open(..., false)) supaya CSS PASTI sudah
-       terpasang SEBELUM body mulai dirender — mencegah tampilan
-       "berantakan tanpa style" sesaat (FOUC) yang muncul di screenshot. -->
+  <!-- ===== Helper: muat file "gaya Apps Script include()" dengan benar ===== -->
+  <!-- Logo.html / Stylesheet.html / JavaScript.html BUKAN file .js/.css murni —
+       isinya dibungkus tag <script>...</script> atau campuran <link>+<style>
+       sendiri (format lama yang didesain untuk include() di server GAS).
+       Kalau dimuat pakai <script src="..."> / <link rel="stylesheet" href="...">
+       biasa, isinya yang diawali "<script>"/"<link>" lagi akan bikin
+       SyntaxError ("Unexpected token '<'") karena browser membacanya sebagai
+       kode JS/CSS mentah, padahal itu markup HTML.
+       Fungsi ini mengambil isi file APA ADANYA (synchronous, supaya urutan
+       eksekusinya PERSIS sama seperti include() di server — tidak ada file
+       yang "kepotong" karena async), lalu memasukkan tiap elemen anaknya
+       (<script>, <style>, <link>, dst) ke DOM dengan cara yang benar — untuk
+       <script>, elemennya SENGAJA dibuat ulang (bukan innerHTML biasa)
+       karena <script> yang disuntik lewat innerHTML TIDAK akan otomatis
+       dieksekusi oleh browser (batasan spec HTML, bukan bug). -->
   <script>
-    (function () {
+    function includeAppFile_(url, targetParent) {
       try {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'Stylesheet.html', false);
+        xhr.open('GET', url, false);
         xhr.send(null);
-        var styleTag = document.createElement('style');
-        styleTag.textContent = xhr.responseText;
-        document.head.appendChild(styleTag);
+        var temp = document.createElement('div');
+        temp.innerHTML = xhr.responseText;
+        var nodes = Array.prototype.slice.call(temp.childNodes);
+        nodes.forEach(function (node) {
+          if (node.tagName === 'SCRIPT') {
+            var s = document.createElement('script');
+            for (var i = 0; i < node.attributes.length; i++) {
+              s.setAttribute(node.attributes[i].name, node.attributes[i].value);
+            }
+            s.textContent = node.textContent;
+            (targetParent || document.head).appendChild(s);
+          } else if (node.nodeType === 1) {
+            (targetParent || document.head).appendChild(node);
+          }
+        });
       } catch (e) {
-        console.error('Gagal memuat Stylesheet.html sebagai CSS:', e);
+        console.error('Gagal memuat ' + url + ':', e);
       }
-    })();
+    }
   </script>
+
+  <!-- Logo.html: dibungkus try/catch di dalam includeAppFile_ di atas — kalau
+       file ini belum ada/gagal dimuat, TIDAK akan menghentikan sisa aplikasi
+       (cuma logo yang tampil kosong/broken), beda dengan sebelumnya yang
+       bikin SyntaxError fatal. -->
+  <script>includeAppFile_('Logo.html');</script>
+
+  <!-- Stylesheet.html: sekarang dimuat lewat mekanisme yang sama, benar-benar
+       menyisipkan <link>/<style> aslinya ke <head> (bukan lagi "dipaksa"
+       jadi isi satu <style> tag seperti percobaan sebelumnya). -->
+  <script>includeAppFile_('Stylesheet.html');</script>
 
   <!-- xlsx-js-style: SheetJS Community Edition + dukungan cell styling,
        dipertahankan persis seperti sebelumnya untuk fitur export Excel. -->
@@ -466,6 +489,10 @@
     // Isi semua elemen logo dengan base64 dari Logo.html (satu sumber saja,
     // supaya string base64 tidak perlu diulang manual di banyak tempat).
     (function() {
+      if (typeof AGRINESIA_LOGO_B64 === 'undefined') {
+        console.warn('AGRINESIA_LOGO_B64 belum terdefinisi (Logo.html belum ada/gagal dimuat) — logo akan tampil kosong sampai file itu ditambahkan.');
+        return;
+      }
       ['loadingLogo', 'loginLogoImg', 'sidebarLogoImg'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.src = AGRINESIA_LOGO_B64;
@@ -473,11 +500,16 @@
     })();
   </script>
 
-  <!-- api-bridge.js WAJIB dimuat SEBELUM JavaScript.html: ia menyediakan
-       shim google.script.run yang dipakai callServer()/login()/getSoDetail()
-       di JavaScript.html, supaya file itu bisa dipakai TANPA DIUBAH. -->
+  <!-- api-bridge.js: file JS murni (bukan format include GAS), aman dimuat
+       biasa lewat <script src>. WAJIB sebelum JavaScript.html karena
+       menyediakan shim google.script.run yang dipakai callServer() dkk. -->
   <script src="api-bridge.js"></script>
-  <script src="JavaScript.html"></script>
+  <!-- JavaScript.html: sama seperti Logo.html/Stylesheet.html, ini file
+       "include GAS" (dibungkus <script>...</script> sendiri), jadi dimuat
+       lewat includeAppFile_() juga, BUKAN <script src="JavaScript.html">
+       (itu penyebab error "Unexpected token '<'" yang bikin splash tidak
+       pernah hilang, karena file gagal dieksekusi sama sekali). -->
+  <script>includeAppFile_('JavaScript.html', document.body);</script>
 
   <!-- Registrasi Service Worker untuk PWA (install prompt + cache asset
        statis supaya perpindahan menu & load ulang terasa instan). -->
