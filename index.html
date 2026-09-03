@@ -94,17 +94,12 @@
 </head>
 <body>
 
-  <!-- ===================== SPLASH SCREEN ===================== -->
-  <!-- Ditampilkan sesaat sebelum JavaScript.html selesai memasang seluruh
-       halaman (login form dkk sudah langsung ada di HTML sejak awal —
-       lihat catatan migrasi — jadi splash ini murni kosmetik untuk
-       menutupi kedipan render pertama, bukan menunggu jaringan seperti
-       versi iframe sebelumnya). Dihapus otomatis oleh script kecil di
-       bawah begitu DOM siap. -->
-  <div id="splash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:radial-gradient(120% 120% at 50% 15%, #16653c 0%, #0f4d2e 45%, #0a3a22 100%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity .18s ease;">
-    <img id="loadingLogo" src="icon-192.png" alt="Stock Opname" style="width:96px;height:96px;border-radius:22px;box-shadow:0 10px 34px rgba(0,0,0,.32);">
-    <div style="font-size:15px;color:rgba(255,255,255,.75);">Memuat aplikasi...</div>
-  </div>
+  <!-- Catatan: splash/loading screen TIDAK dibuat di sini lagi — app kamu
+       (markup di bawah) SUDAH punya #loadingOverlay sendiri (logo + ring
+       spinner + teks "Memuat aplikasi...") yang otomatis disembunyikan oleh
+       checkSession() di JavaScript.html begitu halaman siap. Splash
+       tambahan di shell ini sebelumnya DUPLIKAT dan malah bentrok (id
+       "loadingLogo" sama persis dengan punya app asli), jadi dihapus. -->
 
   <!-- ============================================================
        DI BAWAH INI: markup asli dari Index.html (GAS) lama kamu,
@@ -474,18 +469,6 @@
       ['loadingLogo', 'loginLogoImg', 'sidebarLogoImg'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.src = AGRINESIA_LOGO_B64;
-      });
-    })();
-  </script>
-
-  <script>
-    (function() {
-      var splash = document.getElementById('splash');
-      window.addEventListener('load', function() {
-        if (splash) {
-          splash.style.opacity = '0';
-          setTimeout(function() { splash.remove(); }, 200);
-        }
       });
     })();
   </script>
