@@ -54,13 +54,35 @@
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.googleusercontent.com">
 
-  <!-- Logo.html & Stylesheet.html: file sama persis dari proyek Apps Script
-       kamu yang lama, TIDAK diubah isinya. Sebelumnya digabung ke halaman
-       lewat include('...') di sisi server (GAS templating) — sekarang
-       digabung lewat tag <script>/<link> biasa karena GitHub Pages adalah
-       hosting statis (tidak bisa menjalankan templating server-side). -->
+  <!-- Logo.html: file sama persis dari proyek Apps Script kamu yang lama,
+       TIDAK diubah isinya. Ini sintaks JS (mendefinisikan AGRINESIA_LOGO_B64),
+       jadi <script src> tetap jalan normal walau ekstensinya .html. -->
   <script src="Logo.html"></script>
-  <link rel="stylesheet" href="Stylesheet.html">
+
+  <!-- Stylesheet.html: TIDAK BISA dimuat lewat <link rel="stylesheet">
+       biasa — GitHub Pages mengirim file .html dengan Content-Type:
+       text/html, dan Chrome/Firefox MENOLAK menerapkan <link
+       rel="stylesheet"> kalau MIME type-nya bukan text/css (strict MIME
+       checking), walau isinya CSS valid. Makanya diambil manual lewat
+       XMLHttpRequest lalu disuntik sebagai elemen <style> — cara ini
+       tidak peduli sama sekali soal Content-Type/MIME dari server.
+       Dibuat SYNCHRONOUS (xhr.open(..., false)) supaya CSS PASTI sudah
+       terpasang SEBELUM body mulai dirender — mencegah tampilan
+       "berantakan tanpa style" sesaat (FOUC) yang muncul di screenshot. -->
+  <script>
+    (function () {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'Stylesheet.html', false);
+        xhr.send(null);
+        var styleTag = document.createElement('style');
+        styleTag.textContent = xhr.responseText;
+        document.head.appendChild(styleTag);
+      } catch (e) {
+        console.error('Gagal memuat Stylesheet.html sebagai CSS:', e);
+      }
+    })();
+  </script>
 
   <!-- xlsx-js-style: SheetJS Community Edition + dukungan cell styling,
        dipertahankan persis seperti sebelumnya untuk fitur export Excel. -->
