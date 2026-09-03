@@ -220,15 +220,7 @@
 
       function send(payload) {
         try {
-          if (window.opener) {
-            window.opener.postMessage(payload, '*');
-          } else if (window.parent && window.parent !== window) {
-            // Mode overlay iframe (khusus iPhone, lihat startScanBarcodeCamera
-            // di JavaScript.html) — tidak ada window.opener karena ini bukan
-            // popup, jadi kirim ke window.parent (app yang menyisipkan
-            // iframe ini) supaya hasil scan tetap sampai.
-            window.parent.postMessage(payload, '*');
-          }
+          if (window.opener) window.opener.postMessage(payload, '*');
         } catch (e) { /* no-op */ }
       }
 
@@ -300,19 +292,6 @@
         } catch (e) { /* no-op */ }
       }
 
-      // Kalau jendela ini popup asli (window.opener ada), dia boleh
-      // menutup dirinya sendiri lewat window.close() seperti semula.
-      // Kalau ini overlay iframe (mode iPhone, tidak ada window.opener),
-      // window.close() tidak berlaku untuk iframe — cukup kirim pesan,
-      // parent (app) yang akan melepas elemen iframe-nya sendiri
-      // (lihat handler so_scan_cancel / stopScanBarcodeCamera di
-      // JavaScript.html).
-      function closeSelfIfPopup() {
-        if (window.opener) {
-          try { window.close(); } catch (e) { /* no-op */ }
-        }
-      }
-
       function stopAndClose(sendCancel) {
         exitFullscreenSafe();
         if (qrReader) {
@@ -320,18 +299,12 @@
             qrReader.stop().then(function () {
               try { qrReader.clear(); } catch (e) {}
               if (sendCancel) send({ type: 'so_scan_cancel' });
-              closeSelfIfPopup();
-            }).catch(function () {
-              if (sendCancel) send({ type: 'so_scan_cancel' });
-              closeSelfIfPopup();
-            });
-          } catch (e) {
-            if (sendCancel) send({ type: 'so_scan_cancel' });
-            closeSelfIfPopup();
-          }
+              window.close();
+            }).catch(function () { window.close(); });
+          } catch (e) { window.close(); }
         } else {
           if (sendCancel) send({ type: 'so_scan_cancel' });
-          closeSelfIfPopup();
+          window.close();
         }
       }
 
@@ -395,26 +368,9 @@
                 // menyelesaikan autofocus antar-frame, jadi bar barcode
                 // tidak "setengah blur" saat prosesnya membaca gambar.
         qrbox: computeQrbox,
-        // aspectRatio SEBELUMNYA dipaksa 16:9 di sini. DIHAPUS — ini
-        // kemungkinan besar AKAR MASALAH "kamera nyala, barcode kelihatan
-        // jelas di kotak, tapi tidak pernah terbaca" khusus di iPhone:
-        // layar iPhone portrait rasionya jauh lebih sempit/tinggi
-        // (~9:19.5) daripada 16:9 (~1.78). Dikombinasikan dengan CSS
-        // "object-fit: cover" pada <video> (biar kamera full-screen,
-        // bukan ada bar hitam) di atas, browser terpaksa MEMBESARKAN
-        // gambar video 16:9 itu sampai tingginya pas, yang artinya
-        // sisi KIRI-KANANNYA terpotong SANGAT BANYAK (cuma ~1/4 lebar
-        // asli yang kelihatan) supaya muat penuh di layar. Yang
-        // terlihat oleh mata di layar HP sudah ter-crop/zoom besar-
-        // besaran begitu, tapi html5-qrcode menghitung area pindainya
-        // dari VIDEO STREAM ASLI (sebelum crop CSS itu terjadi) — jadi
-        // kotak scan yang diarahkan user ke barcode secara VISUAL,
-        // ternyata memindai bagian frame kamera yang BERBEDA dan tidak
-        // pernah kena barcode-nya sama sekali. Dengan aspectRatio
-        // dihapus, browser/kamera iPhone akan pakai rasio nativenya
-        // sendiri (biasanya jauh lebih dekat ke rasio layar), sehingga
-        // crop dari object-fit:cover jauh lebih kecil dan area yang
-        // dipindai library kembali selaras dengan yang terlihat user.
+        aspectRatio: 1.7777778, // dorong stream mendekati 16:9 agar FOV
+                                 // lebih lebar, membantu barcode besar/dekat
+                                 // tetap seluruhnya masuk frame.
         disableFlip: false,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
@@ -475,30 +431,13 @@
         hideLibraryQrbox();
         setTimeout(hideLibraryQrbox, 300); // library kadang re-render qrbox sesaat setelah start
 
-        // Minta resolusi lebih tinggi + fokus kontinu SETELAH kamera jalan
-        // (bukan lewat cameraIdOrConfig di atas, supaya tidak kena error
-        // "object should have exactly 1 key"). Resolusi default browser
-        // untuk getUserMedia kadang cukup rendah (mis. 640x480) — barcode
-        // yang padat/kecil bisa gagal ke-decode walau kelihatan "jelas"
-        // secara visual di layar HP. focusMode continuous jaga kamera
-        // tetap fokus walau HP digerakkan mendekat/menjauh ke barang.
-        // Best-effort murni: kalau device/browser tidak dukung, gagal
-        // senyap dan tidak mengganggu scan yang sudah jalan.
-        try {
-          qrReader.applyVideoConstraints({
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: 'continuous' }]
-          }).catch(function () {});
-        } catch (e) { /* browser tidak dukung, abaikan */ }
-
-        var videoEl = document.querySelector('#reader video');
         // Tap-to-focus: beberapa HP tidak otomatis re-fokus saat objek
         // berubah jarak mendadak (mis. dari cek email lalu langsung
         // hadap kamera dekat barang). applyConstraints dengan
         // pointsOfInterest memicu kamera fokus ulang ke titik yang
         // ditap user. Kalau browser tidak mendukung, ini gagal senyap
         // (try/catch) dan tidak mengganggu fungsi utama.
+        var videoEl = document.querySelector('#reader video');
         if (videoEl) {
           videoEl.addEventListener('click', function (e) {
             try {
