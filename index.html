@@ -1,30 +1,27 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+  <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Stock Opname — Agrinesia</title>
 
   <!-- ===================== GANTI INI ===================== -->
-  <!-- Ganti URL di bawah dengan URL /exec Web App Stock Opname kamu.
-       Contoh: https://script.google.com/macros/s/AKfycb.../exec -->
+  <!-- URL /exec Web App Code.gs kamu (backend). Sama seperti sebelumnya,
+       tinggal ganti nilainya kalau kamu deploy ulang Code.gs dan URL /exec
+       berubah. HARUS didefinisikan SEBELUM api-bridge.js dimuat. -->
   <script>
     var SO_APP_URL = "https://script.google.com/a/macros/agrinesia.co.id/s/AKfycbyHxJXf9BME1mIEyo9ZxjH0y-MxvK2EMkM1CQRabMhGbn02eOCwOyyy2GglnhV4spJSeQ/exec";
+    // Dipakai oleh JavaScript.html (variabel lama, dipertahankan biar tidak
+    // perlu ubah kode lama yang mungkin masih mereferensikannya).
+    var SO_WEBAPP_URL = SO_APP_URL;
   </script>
   <!-- ======================================================== -->
 
-  <!-- PERCEPAT LOADING: buka koneksi (DNS + TLS handshake) ke domain
-       script.google.com dan googleusercontent.com (tempat isi app SO
-       akhirnya di-serve setelah redirect /exec) SEDINI mungkin, sebelum
-       iframe sempat diminta. Browser jadi sudah "siap sambung" duluan,
-       memotong sebagian waktu yang biasanya baru mulai begitu iframe.src
-       diisi lewat JS di bawah — mempercepat splash "Memuat aplikasi..."
-       tanpa mengubah proses loading app SO itu sendiri sama sekali. -->
-  <link rel="preconnect" href="https://script.google.com" crossorigin>
-  <link rel="dns-prefetch" href="https://script.google.com">
-  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
-  <link rel="dns-prefetch" href="https://script.googleusercontent.com">
-
+  <!-- ===================== PWA ===================== -->
+  <!-- Manifest sekarang file statis di GitHub Pages (manifest.json), BUKAN
+       lagi di-generate dari doGet()?pwa=manifest — karena frontend sudah
+       tidak lagi "tinggal" di domain script.google.com. -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f4d2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -34,339 +31,459 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
 
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      background: #0f4d2e;
-    }
-    /* ===== Pengukur safe-area (notch/Dynamic Island/home-indicator) =====
-       Dokumen INI (top-level, bukan di dalam iframe) yang bisa membaca
-       env(safe-area-inset-*) dengan benar di Safari iOS — app SO di
-       dalam iframe TIDAK BISA membacanya sendiri (batasan keamanan
-       iframe cross-origin script.google.com/googleusercontent.com).
-       #safeAreaProbe murni elemen bantu 0x0 supaya JS bisa "mengintip"
-       nilai env() lewat getComputedStyle (env() tidak bisa dibaca
-       langsung dari JS), lalu nilainya dikirim ke iframe lewat
-       postMessage (lihat script di bawah). Tidak terlihat & tidak
-       memengaruhi layout apa pun. */
-    #safeAreaProbe {
-      position: fixed;
-      top: env(safe-area-inset-top, 0px);
-      right: env(safe-area-inset-right, 0px);
-      bottom: env(safe-area-inset-bottom, 0px);
-      left: env(safe-area-inset-left, 0px);
-      width: 0;
-      height: 0;
-      pointer-events: none;
-      visibility: hidden;
-    }
-    #appFrame {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-    }
+  <script>
+    // Terapkan tema tersimpan SEBELUM CSS/body dirender, supaya tidak ada
+    // kedipan (flash) tampilan terang sesaat sebelum berpindah ke gelap
+    // saat halaman dibuka/hard refresh. (Tidak diubah dari versi lama.)
+    (function() {
+      try {
+        var saved = localStorage.getItem('so_theme');
+        if (saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
 
-    /* ===================== SPLASH SCREEN ===================== */
-    /* Splash modern selagi iframe app SO memuat: gradient bergerak halus,
-       logo dengan efek glow + pulse, ring loading, dan teks fade/shimmer.
-       Semua CSS-only (tidak ada library tambahan) supaya tetap ringan
-       dan tidak nambah request network sebelum app SO sendiri kebuka. */
-    #splash {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 22px;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      z-index: 2;
-      background: radial-gradient(120% 120% at 50% 15%, #16653c 0%, #0f4d2e 45%, #0a3a22 100%);
-      transition: opacity 0.22s ease, transform 0.22s ease;
-    }
+  <!-- ===== PERCEPAT LOADING: preconnect ke domain GAS lebih awal ===== -->
+  <!-- Sekarang komunikasi ke backend lewat JSONP (tag <script src>), jadi
+       preconnect ini masih relevan untuk memangkas waktu DNS+TLS handshake
+       sebelum request JSONP pertama ditembakkan (mis. saat login). -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="https://script.googleusercontent.com">
 
-    /* Beberapa blob cahaya lembut yang mengambang pelan di background,
-       biar tidak terasa flat/statis. Murni dekoratif. */
-    #splash::before,
-    #splash::after {
-      content: "";
-      position: absolute;
-      width: 260px;
-      height: 260px;
-      border-radius: 50%;
-      filter: blur(60px);
-      opacity: 0.35;
-      pointer-events: none;
-    }
-    #splash::before {
-      background: #d99a4e;
-      top: -60px;
-      left: -60px;
-      animation: floatBlob1 7s ease-in-out infinite;
-    }
-    #splash::after {
-      background: #2e8f5c;
-      bottom: -80px;
-      right: -60px;
-      animation: floatBlob2 8s ease-in-out infinite;
-    }
-    @keyframes floatBlob1 {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      50%      { transform: translate(30px, 25px) scale(1.15); }
-    }
-    @keyframes floatBlob2 {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      50%      { transform: translate(-25px, -20px) scale(1.1); }
-    }
+  <!-- Logo.html & Stylesheet.html: file sama persis dari proyek Apps Script
+       kamu yang lama, TIDAK diubah isinya. Sebelumnya digabung ke halaman
+       lewat include('...') di sisi server (GAS templating) — sekarang
+       digabung lewat tag <script>/<link> biasa karena GitHub Pages adalah
+       hosting statis (tidak bisa menjalankan templating server-side). -->
+  <script src="Logo.html"></script>
+  <link rel="stylesheet" href="Stylesheet.html">
 
-    #splash .logo-wrap {
-      position: relative;
-      width: 148px;
-      height: 148px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1;
-    }
+  <!-- xlsx-js-style: SheetJS Community Edition + dukungan cell styling,
+       dipertahankan persis seperti sebelumnya untuk fitur export Excel. -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
-    /* Ring loading yang berputar mengelilingi logo, dengan gradient
-       trail (bukan solid arc) supaya terasa lebih premium & bukan
-       spinner generik. */
-    #splash .spin-ring {
-      position: absolute;
-      inset: -18px;
-      border-radius: 50%;
-      background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        rgba(224, 168, 92, 0) 30deg,
-        rgba(224, 168, 92, 0.9) 300deg,
-        rgba(224, 168, 92, 1) 360deg
-      );
-      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-      animation: spinRing 1.3s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-    }
-    @keyframes spinRing {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Glow lembut berdenyut di belakang logo — kini beririsan dengan
-       glow bawaan icon PNG sendiri (icon-any-*.png sudah punya soft
-       glow terpahat di filenya), sehingga transisi dari native splash
-       Android ke splash custom ini nyaris tak terlihat sebagai "loncatan
-       gaya" karena keduanya sama-sama menampilkan logo yang "menyala". */
-    #splash .logo-glow {
-      position: absolute;
-      inset: -10px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
-      filter: blur(14px);
-      opacity: 0.4;
-      animation: glowPulse 2.2s ease-in-out infinite;
-    }
-    @keyframes glowPulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.9); }
-      50%      { opacity: 0.55; transform: scale(1.08); }
-    }
-
-    #splash img {
-      position: relative;
-      width: 112px;
-      height: 112px;
-      border-radius: 26px;
-      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
-      opacity: 0;
-      animation: logoEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
-                 logoPulse 2.2s ease-in-out 0.5s infinite;
-    }
-    @keyframes logoEnter {
-      from { opacity: 0; transform: scale(0.7); }
-      to   { opacity: 1; transform: scale(1); }
-    }
-    @keyframes logoPulse {
-      0%, 100% { transform: scale(1); }
-      50%      { transform: scale(1.05); }
-    }
-
-    #splash .brand {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      opacity: 0;
-      animation: fadeUp 0.6s ease 0.35s forwards;
-    }
-
-    #splash .txt {
-      display: flex;
-      align-items: baseline;
-      gap: 3px;
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.7);
-      opacity: 0;
-      animation: fadeUp 0.6s ease 0.5s forwards;
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Titik-titik "..." yang berkedip bergantian, dipisah dari teks
-       supaya lebih hidup daripada teks statis "Memuat...". */
-    #splash .txt .dot {
-      animation: dotBlink 1.4s ease-in-out infinite;
-      opacity: 0.2;
-    }
-    #splash .txt .dot:nth-child(2) { animation-delay: 0.2s; }
-    #splash .txt .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes dotBlink {
-      0%, 80%, 100% { opacity: 0.2; }
-      40%           { opacity: 1; }
-    }
-
-    #splash.hide {
-      opacity: 0;
-      transform: scale(1.02);
-      pointer-events: none;
-    }
-  </style>
+  <!-- html5-qrcode: dipertahankan persis seperti sebelumnya untuk fitur
+       Scan Barcode saat Stock Opname. -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
-  <div id="safeAreaProbe"></div>
-  <div id="splash">
-    <div class="logo-wrap">
-      <div class="spin-ring"></div>
-      <div class="logo-glow"></div>
-      <img src="icon-192.png" alt="Stock Opname">
+
+  <!-- ===================== SPLASH SCREEN ===================== -->
+  <!-- Ditampilkan sesaat sebelum JavaScript.html selesai memasang seluruh
+       halaman (login form dkk sudah langsung ada di HTML sejak awal —
+       lihat catatan migrasi — jadi splash ini murni kosmetik untuk
+       menutupi kedipan render pertama, bukan menunggu jaringan seperti
+       versi iframe sebelumnya). Dihapus otomatis oleh script kecil di
+       bawah begitu DOM siap. -->
+  <div id="splash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:radial-gradient(120% 120% at 50% 15%, #16653c 0%, #0f4d2e 45%, #0a3a22 100%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity .18s ease;">
+    <img id="loadingLogo" src="icon-192.png" alt="Stock Opname" style="width:96px;height:96px;border-radius:22px;box-shadow:0 10px 34px rgba(0,0,0,.32);">
+    <div style="font-size:15px;color:rgba(255,255,255,.75);">Memuat aplikasi...</div>
+  </div>
+
+  <!-- ============================================================
+       DI BAWAH INI: markup asli dari Index.html (GAS) lama kamu,
+       disalin PERSIS apa adanya (sidebar, login form, pageContent,
+       dst) — desain & fitur TIDAK diubah sama sekali. Hanya
+       "rumahnya" yang pindah dari HtmlService ke file statis ini.
+       ============================================================ -->
+
+  <!-- Catatan: favicon TIDAK di-set di sini karena Apps Script mengabaikan
+       <link rel="icon"> di dalam file HTML. Favicon di-set dari server via
+       HtmlOutput.setFaviconUrl() di Code.gs (fungsi doGet). -->
+
+  <!-- ===================== TOAST ===================== -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ===================== LOADING OVERLAY ===================== -->
+  <!-- Default: TIDAK "hidden" dan pakai mode fullscreen (gradient hijau
+       full-screen, mirip splash screen), supaya begitu halaman dibuka /
+       hard refresh, yang pertama terlihat adalah ini — bukan layar putih
+       kosong sebelum app shell/login page selesai dirender. JS akan
+       menyembunyikannya (hideLoading) atau melepas mode fullscreen begitu
+       login page / dashboard siap ditampilkan. -->
+  <div id="loadingOverlay" class="loading-overlay loading-overlay-fullscreen">
+    <div class="brand-spinner">
+      <img src="" id="loadingLogo" class="brand-spinner-logo" alt="Agrinesia">
+      <div class="brand-spinner-ring"></div>
     </div>
-    <div class="brand">Stock Opname</div>
-    <div class="txt">
-      <span>Memuat aplikasi</span>
-      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+    <div class="loading-app-name">Stock Opname — Agrinesia</div>
+    <div class="loading-text" id="loadingText">Memuat aplikasi...</div>
+  </div>
+
+  <!-- ===================== LOGIN PAGE ===================== -->
+  <div id="loginPage" class="login-page">
+    <div class="login-shape login-shape-blob-1"></div>
+    <div class="login-shape login-shape-blob-2"></div>
+    <div class="login-shape login-shape-blob-3"></div>
+    <div class="login-shape login-shape-ring"></div>
+    <div class="login-shape login-shape-dot login-shape-dot-1"></div>
+    <div class="login-shape login-shape-dot login-shape-dot-2"></div>
+    <div class="login-shape login-shape-dot login-shape-dot-3"></div>
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon logo-icon-img"><img src="" id="loginLogoImg" alt="Agrinesia"></div>
+        <div class="login-eyebrow">Stock Opname System</div>
+        <h1>Selamat datang kembali</h1>
+        <p>Masuk ke akun Anda untuk melanjutkan.</p>
+      </div>
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label>Username</label>
+          <div class="login-input-wrap">
+            <span class="login-input-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <input type="text" id="loginUsername" placeholder="Masukkan username" autocomplete="username" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="login-password-wrap login-input-wrap">
+            <span class="login-input-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            </span>
+            <input type="password" id="loginPassword" placeholder="Masukkan password" autocomplete="current-password" required>
+            <button type="button" class="login-password-toggle" id="loginPasswordToggle" title="Lihat password" aria-label="Lihat password">
+              <svg class="icon-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="login-remember-row">
+          <label class="login-remember-check">
+            <input type="checkbox" id="loginRemember" checked>
+            <span class="login-remember-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span>Ingat saya</span>
+          </label>
+        </div>
+        <div id="loginError" class="login-error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-block login-submit-btn" id="loginBtn">
+          <span>Masuk</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
     </div>
   </div>
-  <!--
-    PENTING soal kamera: JANGAN ganti ini jadi navigasi top-level
-    (window.location = SO_APP_URL). App SO (JavaScript.html, fungsi
-    isRunningAsPwa()) SENGAJA mengecek window.matchMedia('(display-mode:
-    standalone)') pada TOP-LEVEL window untuk memutuskan apakah fitur Scan
-    Barcode boleh dipakai. Kalau top-level window dinavigasi keluar dari
-    origin/scope PWA ini (ke script.google.com), Android/Chrome keluar dari
-    mode standalone WebAPK, display-mode berubah, dan app SO otomatis
-    mengunci fitur scan (nampilin modal "Install Aplikasi Dulu") — walau
-    sebenarnya app sudah ter-install. Makanya HARUS tetap iframe, supaya
-    top-level document (index.html di GitHub Pages ini) yang tetap
-    standalone, sementara isi app SO dimuat di iframe di dalamnya.
 
-    Yang sebelumnya kurang: atribut "allow" pada iframe ini TIDAK
-    menyertakan "camera" (cuma clipboard-write), sehingga browser
-    memblokir permission delegation ke iframe SEBELUM sempat sampai ke
-    getUserMedia()/Html5Qrcode di dalamnya. Ditambahkan camera & microphone
-    di bawah.
-  -->
-  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read" fetchpriority="high" loading="eager"></iframe>
+  <!-- ===================== APP SHELL ===================== -->
+  <div id="appShell" class="app-shell hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon logo-icon-img sidebar-logo-icon"><img src="" id="sidebarLogoImg" alt="Agrinesia"></div>
+        <span class="logo-text">Stock Opname</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item nav-item-standalone active" data-page="dashboard" title="Dashboard">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+
+        <div class="nav-group" id="navGroupOperasional">
+          <button type="button" class="nav-group-header" data-group="navGroupOperasional">
+            <span class="nav-group-label">Operasional</span>
+            <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-group-items"><div>
+          <a href="#" class="nav-item" data-page="stockOpname" title="Stock Opname">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+            <span class="nav-label">Stock Opname</span>
+          </a>
+          <a href="#" class="nav-item" data-page="riwayat" title="Riwayat SO">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+            <span class="nav-label">Riwayat SO</span>
+          </a>
+          </div></div>
+        </div>
+
+        <div class="nav-group" id="navGroupMaster">
+          <button type="button" class="nav-group-header" data-group="navGroupMaster">
+            <span class="nav-group-label">Master</span>
+            <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-group-items"><div>
+          <a href="#" class="nav-item" data-page="itemMaster" title="Item Master">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+            <span class="nav-label">Item Master</span>
+          </a>
+          <a href="#" class="nav-item" data-page="categoryManagement" title="Category Management">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83V3H3v8h.83l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg></span>
+            <span class="nav-label">Category Management</span>
+          </a>
+          <a href="#" class="nav-item" id="navStoreManagement" data-page="storeManagement" title="Store Management">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/></svg></span>
+            <span class="nav-label">Store Management</span>
+          </a>
+          </div></div>
+        </div>
+
+        <div class="nav-group" id="navGroupAnalytics">
+          <button type="button" class="nav-group-header" data-group="navGroupAnalytics">
+            <span class="nav-group-label">Analytics</span>
+            <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-group-items"><div>
+          <a href="#" class="nav-item" data-page="laporan" title="Laporan">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg></span>
+            <span class="nav-label">Laporan</span>
+          </a>
+          <a href="#" class="nav-item" data-page="auditSelisih" title="Audit Selisih Berulang">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg></span>
+            <span class="nav-label">Audit Selisih</span>
+          </a>
+          <a href="#" class="nav-item" data-page="perbandinganPeriode" title="Perbandingan Antar Periode">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="6" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="18" y="5" width="3" height="13"/></svg></span>
+            <span class="nav-label">Banding Periode</span>
+          </a>
+          </div></div>
+        </div>
+
+        <div class="nav-group" id="navGroupAdmin">
+          <button type="button" class="nav-group-header" data-group="navGroupAdmin">
+            <span class="nav-group-label">Admin</span>
+            <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-group-items"><div>
+          <a href="#" class="nav-item" id="navUserManagement" data-page="userManagement" title="User Management">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="nav-label">User Management</span>
+          </a>
+          <a href="#" class="nav-item" id="navActivityLog" data-page="activityLog" title="Activity Log">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></span>
+            <span class="nav-label">Activity Log</span>
+          </a>
+          <a href="#" class="nav-item" id="navRolePermission" data-page="rolePermission" title="Role & Permission">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></span>
+            <span class="nav-label">Role & Permission</span>
+          </a>
+          </div></div>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item" id="logoutBtn" title="Logout">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>
+          <span class="nav-label">Logout</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Ciutkan sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="3"/>
+            <rect x="4.3" y="5.3" width="5.6" height="13.4" rx="1.6" stroke="none"/>
+          </svg>
+        </button>
+        <div class="topbar-title-group">
+          <div class="topbar-title" id="pageTitle">Dashboard</div>
+          <div class="topbar-date" id="topbarDate"></div>
+        </div>
+        <div class="topbar-user">
+          <div class="notif-widget" id="notifWidget">
+            <button type="button" class="topbar-icon-btn" id="notifBtn" title="Notifikasi">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span class="topbar-icon-badge hidden" id="notifBadge">0</span>
+            </button>
+            <div class="notif-popover" id="notifPopover">
+              <div class="notif-popover-header">
+                <span class="notif-popover-title">Notifikasi</span>
+                <button type="button" class="notif-mark-all" id="notifMarkAll">Tandai semua dibaca</button>
+              </div>
+              <div class="notif-popover-list" id="notifPopoverList">
+                <div class="notif-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <span>Tidak ada notifikasi</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="theme-toggle-btn" id="themeToggleBtn" title="Ganti tampilan gelap/terang">
+            <span class="icon-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+            <span class="icon-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5"/><path d="M12 19v2.5"/><path d="M4.6 4.6l1.8 1.8"/><path d="M17.6 17.6l1.8 1.8"/><path d="M2.5 12h2.5"/><path d="M19 12h2.5"/><path d="M4.6 19.4l1.8-1.8"/><path d="M17.6 6.4l1.8-1.8"/></svg></span>
+          </button>
+          <div class="topbar-divider"></div>
+          <div class="user-info">
+            <span class="user-name" id="topbarUserName">-</span>
+            <span class="user-role badge badge-role" id="topbarUserRole">-</span>
+          </div>
+          <div class="user-avatar" id="userAvatar">U</div>
+        </div>
+      </header>
+
+      <main class="content" id="pageContent">
+        <!-- Pages di-render via JS -->
+      </main>
+
+      <!-- ===================== BOTTOM NAV (khusus mobile/HP) =====================
+           Sidebar (kiri) disembunyikan total di breakpoint HP (lihat CSS
+           @media max-width:900px .sidebar{display:none}), diganti bar
+           navigasi bawah gaya app mobile modern: Dashboard, Stock Opname,
+           Riwayat SO selalu tampil (3 menu paling sering dipakai semua
+           role — Admin/SC/Store), + tombol "Lainnya" yang membuka bottom
+           sheet berisi SISA menu (dikelompokkan per kategori persis seperti
+           sidebar: Operasional/Master/Analytics/Admin). Item di sini SENGAJA
+           pakai class .nav-item + data-page yang SAMA dengan item sidebar —
+           applyRoleMenu() dan navigateToNow() di JavaScript.html men-select
+           SEMUA elemen .nav-item[data-page] di dokumen (bukan cuma yang di
+           dalam <aside>), jadi show/hide sesuai role & highlight menu aktif
+           OTOMATIS ikut berfungsi di sini tanpa perlu kode tambahan. -->
+      <nav class="bottom-nav" id="bottomNav">
+        <a href="#" class="nav-item bottom-nav-item" data-page="dashboard">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+          <span class="bottom-nav-label">Dashboard</span>
+        </a>
+        <a href="#" class="nav-item bottom-nav-item" data-page="stockOpname">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          <span class="bottom-nav-label">Stock Opname</span>
+        </a>
+        <a href="#" class="nav-item bottom-nav-item" data-page="riwayat">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+          <span class="bottom-nav-label">Riwayat SO</span>
+        </a>
+        <a href="#" class="nav-item bottom-nav-item" data-page="laporan">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg></span>
+          <span class="bottom-nav-label">Laporan</span>
+        </a>
+        <button type="button" class="bottom-nav-item bottom-nav-more" id="bottomNavMoreBtn">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>
+          <span class="bottom-nav-label">Lainnya</span>
+        </button>
+      </nav>
+
+      <!-- Bottom sheet "Lainnya" — daftar menu selain 3 yang sudah ada di
+           bottom nav, dikelompokkan per kategori sama seperti sidebar
+           desktop. Backdrop + panel dianimasikan slide-up dari bawah,
+           ditutup dengan klik backdrop, tombol ×, atau memilih salah satu
+           menu (navigateTo() sendiri yang otomatis menutup sheet ini —
+           lihat closeMoreSheet() di JavaScript.html). -->
+      <div class="more-sheet-backdrop" id="moreSheetBackdrop"></div>
+      <div class="more-sheet" id="moreSheet" role="dialog" aria-label="Menu lainnya">
+        <div class="more-sheet-handle"></div>
+        <div class="more-sheet-header">
+          <span class="more-sheet-title">Menu Lainnya</span>
+          <button type="button" class="more-sheet-close" id="moreSheetCloseBtn" aria-label="Tutup">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="more-sheet-body">
+          <div class="more-sheet-group" id="moreGroupOperasional">
+            <div class="more-sheet-group-label">Operasional</div>
+            <a href="#" class="nav-item more-sheet-item" data-page="stockOpname">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+              <span>Stock Opname</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" data-page="riwayat">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+              <span>Riwayat SO</span>
+            </a>
+          </div>
+
+          <div class="more-sheet-group" id="moreGroupMaster">
+            <div class="more-sheet-group-label">Master</div>
+            <a href="#" class="nav-item more-sheet-item" data-page="itemMaster">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+              <span>Item Master</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" data-page="categoryManagement">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83V3H3v8h.83l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg></span>
+              <span>Category Management</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" id="moreNavStoreManagement" data-page="storeManagement">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/></svg></span>
+              <span>Store Management</span>
+            </a>
+          </div>
+
+          <div class="more-sheet-group" id="moreGroupAnalytics">
+            <div class="more-sheet-group-label">Analytics</div>
+            <a href="#" class="nav-item more-sheet-item" data-page="auditSelisih">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg></span>
+              <span>Audit Selisih</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" data-page="perbandinganPeriode">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="6" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="18" y="5" width="3" height="13"/></svg></span>
+              <span>Banding Periode</span>
+            </a>
+          </div>
+
+          <div class="more-sheet-group" id="moreGroupAdmin">
+            <div class="more-sheet-group-label">Admin</div>
+            <a href="#" class="nav-item more-sheet-item" id="moreNavUserManagement" data-page="userManagement">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              <span>User Management</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" id="moreNavActivityLog" data-page="activityLog">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></span>
+              <span>Activity Log</span>
+            </a>
+            <a href="#" class="nav-item more-sheet-item" id="moreNavRolePermission" data-page="rolePermission">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></span>
+              <span>Role & Permission</span>
+            </a>
+          </div>
+
+          <div class="more-sheet-group more-sheet-group-footer">
+            <a href="#" class="nav-item more-sheet-item more-sheet-logout" id="moreLogoutBtn">
+              <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>
+              <span>Logout</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL CONTAINER ===================== -->
+  <div id="modalContainer"></div>
 
   <script>
-    (function () {
-      var frame = document.getElementById('appFrame');
-      var splash = document.getElementById('splash');
-
-      if (!SO_APP_URL || SO_APP_URL.indexOf('GANTI_DENGAN_URL_EXEC_KAMU') !== -1) {
-        splash.innerHTML = '<div class="txt" style="max-width:80%;text-align:center;line-height:1.5;">'
-          + 'URL app belum diisi.<br>Edit index.html, ganti nilai <b>SO_APP_URL</b> '
-          + 'dengan URL /exec Web App Stock Opname kamu.</div>';
-        return;
-      }
-
-      // ===== CACHE-BUSTER =====
-      // Apps Script /exec kadang di-cache cukup agresif oleh browser/WebView
-      // (terutama di PWA/WebAPK Android), sehingga update CSS/JS terbaru
-      // yang sudah di-deploy di Apps Script tidak langsung terlihat di PWA
-      // walau sudah uninstall-install ulang PWA-nya (uninstall PWA TIDAK
-      // menghapus cache HTTP WebView). Menambahkan query string unik setiap
-      // kali index.html ini dimuat memaksa browser menganggapnya sebagai
-      // request baru (bukan mengambil dari cache), sehingga app SO yang
-      // termuat di iframe SELALU versi terbaru dari deployment Apps
-      // Script — tanpa perlu clear cache manual tiap kali ada update.
-      var cacheBustedUrl = SO_APP_URL
-        + (SO_APP_URL.indexOf('?') === -1 ? '?' : '&')
-        + '_v=' + Date.now();
-
-      frame.addEventListener('load', function () {
-        splash.classList.add('hide');
-        // Delay penghapusan splash dari layout dipangkas (300ms -> 180ms,
-        // mengikuti durasi transisi #splash.hide yang juga sudah 0.4s->
-        // dipercepat) supaya transisi ke app terasa lebih sigap, bukan
-        // menunggu lama padahal app sebenarnya sudah selesai dimuat.
-        setTimeout(function () { splash.style.display = 'none'; }, 180);
-      });
-
-      // Set src SESEGERA MUNGKIN (baris ini, bukan ditunda lewat
-      // requestAnimationFrame/setTimeout/DOMContentLoaded) — begitu skrip
-      // ini jalan, permintaan jaringan ke SO_APP_URL langsung ditembakkan.
-      // Dikombinasikan dengan <link rel="preconnect"> di <head>, koneksi
-      // TLS ke script.google.com biasanya sudah "siap" duluan sebelum
-      // baris ini sempat berjalan, sehingga permintaan pertama tidak lagi
-      // menunggu DNS+handshake dari nol.
-      frame.src = cacheBustedUrl;
-
-      // ===== Kirim safe-area ke app SO di dalam iframe =====
-      // App SO (JavaScript.html) sudah punya listener 'message' yang
-      // menunggu { type: 'so_safe_area', top, bottom, left, right } untuk
-      // mengisi padding notch/Dynamic Island/home-indicator di iPhone —
-      // TAPI sebelumnya shell ini (index.html) tidak pernah benar-benar
-      // mengirim pesan itu, jadi nilainya selalu 0 dan topbar/bottom-nav
-      // app SO mepet ke notch/status-bar (dilaporkan user, tampilan
-      // "berantakan" khusus di iPhone). Fungsi di bawah membaca
-      // #safeAreaProbe (lihat CSS di atas) lalu mem-postMessage-kan
-      // nilainya ke iframe SETIAP kali ukurannya mungkin berubah (load
-      // awal, resize, ganti orientasi, splash hilang) supaya app SO
-      // selalu punya nilai terbaru & akurat.
-      function sendSafeArea() {
-        try {
-          var cs = getComputedStyle(document.getElementById('safeAreaProbe'));
-          var payload = {
-            type: 'so_safe_area',
-            top: parseFloat(cs.top) || 0,
-            right: parseFloat(cs.right) || 0,
-            bottom: parseFloat(cs.bottom) || 0,
-            left: parseFloat(cs.left) || 0
-          };
-          if (frame.contentWindow) {
-            frame.contentWindow.postMessage(payload, '*');
-          }
-        } catch (e) { /* aman diabaikan — tidak boleh sampai memutus app */ }
-      }
-
-      // Kirim segera setelah iframe selesai load (kondisi paling penting —
-      // saat itulah app SO baru siap menerima & memasang listener-nya),
-      // lalu ulangi beberapa kali di detik-detik awal untuk jaga-jaga app
-      // SO belum sempat pasang listener persis saat pesan pertama tiba
-      // (race condition kecil antar dua dokumen berbeda).
-      frame.addEventListener('load', function () {
-        sendSafeArea();
-        setTimeout(sendSafeArea, 300);
-        setTimeout(sendSafeArea, 1000);
-        setTimeout(sendSafeArea, 2000);
-      });
-
-      // Ganti orientasi (potrait <-> landscape) mengubah nilai
-      // safe-area-inset-left/right vs top/bottom di iPhone (notch pindah
-      // sisi) — kirim ulang supaya app SO ikut menyesuaikan.
-      window.addEventListener('resize', sendSafeArea);
-      window.addEventListener('orientationchange', function () {
-        setTimeout(sendSafeArea, 300);
+    // Isi semua elemen logo dengan base64 dari Logo.html (satu sumber saja,
+    // supaya string base64 tidak perlu diulang manual di banyak tempat).
+    (function() {
+      ['loadingLogo', 'loginLogoImg', 'sidebarLogoImg'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.src = AGRINESIA_LOGO_B64;
       });
     })();
+  </script>
+
+  <script>
+    (function() {
+      var splash = document.getElementById('splash');
+      window.addEventListener('load', function() {
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(function() { splash.remove(); }, 200);
+        }
+      });
+    })();
+  </script>
+
+  <!-- api-bridge.js WAJIB dimuat SEBELUM JavaScript.html: ia menyediakan
+       shim google.script.run yang dipakai callServer()/login()/getSoDetail()
+       di JavaScript.html, supaya file itu bisa dipakai TANPA DIUBAH. -->
+  <script src="api-bridge.js"></script>
+  <script src="JavaScript.html"></script>
+
+  <!-- Registrasi Service Worker untuk PWA (install prompt + cache asset
+       statis supaya perpindahan menu & load ulang terasa instan). -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('service-worker.js').catch(function(err) {
+          console.warn('SW register gagal:', err);
+        });
+      });
+    }
   </script>
 </body>
 </html>
