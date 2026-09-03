@@ -287,6 +287,20 @@
         return;
       }
 
+      // ===== CACHE-BUSTER =====
+      // Apps Script /exec kadang di-cache cukup agresif oleh browser/WebView
+      // (terutama di PWA/WebAPK Android), sehingga update CSS/JS terbaru
+      // yang sudah di-deploy di Apps Script tidak langsung terlihat di PWA
+      // walau sudah uninstall-install ulang PWA-nya (uninstall PWA TIDAK
+      // menghapus cache HTTP WebView). Menambahkan query string unik setiap
+      // kali index.html ini dimuat memaksa browser menganggapnya sebagai
+      // request baru (bukan mengambil dari cache), sehingga app SO yang
+      // termuat di iframe SELALU versi terbaru dari deployment Apps
+      // Script — tanpa perlu clear cache manual tiap kali ada update.
+      var cacheBustedUrl = SO_APP_URL
+        + (SO_APP_URL.indexOf('?') === -1 ? '?' : '&')
+        + '_v=' + Date.now();
+
       frame.addEventListener('load', function () {
         splash.classList.add('hide');
         // Delay penghapusan splash dari layout dipangkas (300ms -> 180ms,
@@ -303,7 +317,7 @@
       // TLS ke script.google.com biasanya sudah "siap" duluan sebelum
       // baris ini sempat berjalan, sehingga permintaan pertama tidak lagi
       // menunggu DNS+handshake dari nol.
-      frame.src = SO_APP_URL;
+      frame.src = cacheBustedUrl;
 
       // ===== Kirim safe-area ke app SO di dalam iframe =====
       // App SO (JavaScript.html) sudah punya listener 'message' yang
