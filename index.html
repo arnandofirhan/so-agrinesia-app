@@ -352,6 +352,57 @@
       window.addEventListener('orientationchange', function () {
         setTimeout(sendSafeArea, 300);
       });
+
+      // ===== Relay jendela kamera Scan Barcode (khusus iOS) =====
+      // Kenapa perlu relay lewat sini: app SO (di dalam #appFrame, origin
+      // script.googleusercontent.com) TIDAK BISA langsung window.open()
+      // atau bikin iframe kamera sendiri di iOS — WebKit/Safari
+      // memblokir akses kamera (getUserMedia) kalau diminta dari
+      // konteks iframe cross-origin bersarang. Dokumen INI (index.html)
+      // origin-nya SAMA PERSIS dengan scanner.html (satu-satunya alasan
+      // kenapa ini bisa jadi solusinya), jadi saat app SO minta lewat
+      // postMessage, index.html inilah yang benar-benar memanggil
+      // window.open('scanner.html', ...) dari konteksnya sendiri —
+      // hasilnya popup top-level yang sah dengan izin kamera normal,
+      // persis seperti buka scanner.html langsung lewat Safari. Setelah
+      // itu pesan dua arah (hasil scan / error / batal) diteruskan
+      // bolak-balik lewat sini. Tidak berlaku & tidak dipakai sama
+      // sekali di Android/desktop (app SO di sana tetap window.open()
+      // langsung tanpa relay, lihat startScanBarcodeCamera di
+      // JavaScript.html).
+      var _scannerPopup = null;
+      window.addEventListener('message', function (event) {
+        var data = event && event.data;
+        if (!data || typeof data !== 'object') return;
+
+        if (data.type === 'so_request_scanner_popup') {
+          try {
+            _scannerPopup = window.open('scanner.html', 'soScanner', 'toolbar=no,location=no,menubar=no,status=no,scrollbars=no');
+            if (_scannerPopup) { try { _scannerPopup.focus(); } catch (e) {} }
+          } catch (e) { _scannerPopup = null; }
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({ type: 'so_scanner_popup_result', ok: !!_scannerPopup }, '*');
+          }
+          return;
+        }
+
+        if (data.type === 'so_scan_relay_to_popup') {
+          // Pesan DARI app SO (lewat iframe #appFrame), diteruskan KE popup.
+          if (_scannerPopup && !_scannerPopup.closed) {
+            try { _scannerPopup.postMessage(data.payload, '*'); } catch (e) {}
+          }
+          return;
+        }
+
+        if (data.type === 'so_scan_result' || data.type === 'so_scan_error' || data.type === 'so_scan_cancel') {
+          // Pesan DARI popup kamera (window.opener-nya = dokumen ini),
+          // diteruskan TURUN ke app SO di dalam iframe.
+          if (event.source === _scannerPopup && frame.contentWindow) {
+            frame.contentWindow.postMessage(data, '*');
+          }
+          return;
+        }
+      });
     })();
   </script>
 </body>
