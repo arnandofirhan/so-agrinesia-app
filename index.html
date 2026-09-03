@@ -317,6 +317,50 @@
       // nilainya ke iframe SETIAP kali ukurannya mungkin berubah (load
       // awal, resize, ganti orientasi, splash hilang) supaya app SO
       // selalu punya nilai terbaru & akurat.
+      // ===== Kirim pesan ke SEMUA level iframe di dalam #appFrame, bukan
+      // cuma satu level =====
+      // AKAR MASALAH yang ditemukan: app SO Google Apps Script (mode
+      // sandbox IFRAME, default) di-serve lewat DUA lapis iframe begitu
+      // /exec dibuka: #appFrame (top, origin script.google.com) berisi
+      // iframe INTERNAL lagi (origin script.googleusercontent.com) yang
+      // BARU benar-benar berisi Index.html/JavaScript.html kita. Kode
+      // sebelumnya cuma postMessage ke frame.contentWindow (lapis
+      // PERTAMA/luar) — pesan itu TIDAK otomatis diteruskan ke lapis
+      // KEDUA di dalamnya, jadi listener 'message' di JavaScript.html
+      // (yang jalan di lapis kedua) tidak pernah menerimanya sama sekali.
+      // Ini menjelaskan DUA bug sekaligus:
+      //  1) safe-area selalu 0 -> topbar mepet notch & space kosong di
+      //     bawah bottom-nav (var(--so-safe-top/bottom) tidak pernah
+      //     terisi karena pesannya tidak pernah sampai).
+      //  2) kamera scan "nyala tapi tidak react" -> hasil scan dari popup
+      //     scanner.html direlay index.html turun ke frame.contentWindow,
+      //     tapi listener so_scan_result di JavaScript.html (lapis kedua)
+      //     tidak pernah menerimanya, jadi barcode yang sudah ke-decode
+      //     seolah hilang begitu saja.
+      // FIX: kirim payload yang sama ke frame.contentWindow DAN ke semua
+      // iframe di dalamnya secara REKURSIF (tidak asal tebak cuma 1 atau
+      // 2 level, supaya tetap aman kalau Google mengubah struktur
+      // nesting-nya kapan saja). window.frames[i] boleh diakses lintas
+      // origin (cuma proxy referensi window, bukan baca isinya), jadi ini
+      // tidak melanggar batasan same-origin policy.
+      function postToAppFrameRecursive_(win, payload, depth) {
+        if (!win || depth > 4) return;
+        try { win.postMessage(payload, '*'); } catch (e) { /* abaikan */ }
+        try {
+          var frames = win.frames;
+          if (frames && frames.length) {
+            for (var i = 0; i < frames.length; i++) {
+              postToAppFrameRecursive_(frames[i], payload, depth + 1);
+            }
+          }
+        } catch (e) { /* abaikan */ }
+      }
+      function postToAppFrame(payload) {
+        if (frame.contentWindow) {
+          postToAppFrameRecursive_(frame.contentWindow, payload, 0);
+        }
+      }
+
       function sendSafeArea() {
         try {
           var cs = getComputedStyle(document.getElementById('safeAreaProbe'));
@@ -327,9 +371,7 @@
             bottom: parseFloat(cs.bottom) || 0,
             left: parseFloat(cs.left) || 0
           };
-          if (frame.contentWindow) {
-            frame.contentWindow.postMessage(payload, '*');
-          }
+          postToAppFrame(payload);
         } catch (e) { /* aman diabaikan — tidak boleh sampai memutus app */ }
       }
 
@@ -396,9 +438,14 @@
 
         if (data.type === 'so_scan_result' || data.type === 'so_scan_error' || data.type === 'so_scan_cancel') {
           // Pesan DARI popup kamera (window.opener-nya = dokumen ini),
-          // diteruskan TURUN ke app SO di dalam iframe.
-          if (event.source === _scannerPopup && frame.contentWindow) {
-            frame.contentWindow.postMessage(data, '*');
+          // diteruskan TURUN ke app SO di dalam iframe — pakai
+          // postToAppFrame (rekursif ke semua lapis iframe) supaya
+          // benar-benar sampai ke listener so_scan_result di
+          // JavaScript.html, bukan cuma nyangkut di lapis iframe
+          // terluar seperti sebelumnya (itu penyebab "kamera nyala
+          // tapi tidak react" saat barcode berhasil di-scan).
+          if (event.source === _scannerPopup) {
+            postToAppFrame(data);
           }
           return;
         }
