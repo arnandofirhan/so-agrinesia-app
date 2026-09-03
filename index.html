@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Stock Opname — Agrinesia</title>
 
+  <!-- ===== Cache-busting untuk shell PWA ini sendiri =====
+       PENTING khusus iOS: GitHub Pages secara default mengizinkan
+       browser/WebView cache index.html cukup lama, dan PWA yang sudah
+       di-"Add to Home Screen" di iPhone sering TETAP menjalankan versi
+       index.html LAMA yang ke-cache walau file di GitHub sudah diganti —
+       bahkan setelah app dibuka-tutup biasa (bukan force quit). Ini bisa
+       bikin terlihat seperti "fix-nya gak jalan" padahal sebenarnya HP
+       belum pernah memuat file yang baru sama sekali. Meta tag di bawah
+       memaksa browser SELALU minta ulang index.html ke server, tidak
+       pernah pakai salinan cache lama. Tidak memengaruhi Android sama
+       sekali (cuma soal caching HTTP, bukan logika app). -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <!-- ===================== GANTI INI ===================== -->
   <!-- Ganti URL di bawah dengan URL /exec Web App Stock Opname kamu.
        Contoh: https://script.google.com/macros/s/AKfycb.../exec -->
