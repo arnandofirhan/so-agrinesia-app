@@ -5,21 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Stock Opname — Agrinesia</title>
 
-  <!-- ===== Cache-busting untuk shell PWA ini sendiri =====
-       PENTING khusus iOS: GitHub Pages secara default mengizinkan
-       browser/WebView cache index.html cukup lama, dan PWA yang sudah
-       di-"Add to Home Screen" di iPhone sering TETAP menjalankan versi
-       index.html LAMA yang ke-cache walau file di GitHub sudah diganti —
-       bahkan setelah app dibuka-tutup biasa (bukan force quit). Ini bisa
-       bikin terlihat seperti "fix-nya gak jalan" padahal sebenarnya HP
-       belum pernah memuat file yang baru sama sekali. Meta tag di bawah
-       memaksa browser SELALU minta ulang index.html ke server, tidak
-       pernah pakai salinan cache lama. Tidak memengaruhi Android sama
-       sekali (cuma soal caching HTTP, bukan logika app). -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-
   <!-- ===================== GANTI INI ===================== -->
   <!-- Ganti URL di bawah dengan URL /exec Web App Stock Opname kamu.
        Contoh: https://script.google.com/macros/s/AKfycb.../exec -->
@@ -288,7 +273,7 @@
     getUserMedia()/Html5Qrcode di dalamnya. Ditambahkan camera & microphone
     di bawah.
   -->
-  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read; fullscreen" allowfullscreen fetchpriority="high" loading="eager"></iframe>
+  <iframe id="appFrame" title="Stock Opname" allow="camera; microphone; clipboard-write; clipboard-read" fetchpriority="high" loading="eager"></iframe>
 
   <script>
     (function () {
@@ -332,50 +317,6 @@
       // nilainya ke iframe SETIAP kali ukurannya mungkin berubah (load
       // awal, resize, ganti orientasi, splash hilang) supaya app SO
       // selalu punya nilai terbaru & akurat.
-      // ===== Kirim pesan ke SEMUA level iframe di dalam #appFrame, bukan
-      // cuma satu level =====
-      // AKAR MASALAH yang ditemukan: app SO Google Apps Script (mode
-      // sandbox IFRAME, default) di-serve lewat DUA lapis iframe begitu
-      // /exec dibuka: #appFrame (top, origin script.google.com) berisi
-      // iframe INTERNAL lagi (origin script.googleusercontent.com) yang
-      // BARU benar-benar berisi Index.html/JavaScript.html kita. Kode
-      // sebelumnya cuma postMessage ke frame.contentWindow (lapis
-      // PERTAMA/luar) — pesan itu TIDAK otomatis diteruskan ke lapis
-      // KEDUA di dalamnya, jadi listener 'message' di JavaScript.html
-      // (yang jalan di lapis kedua) tidak pernah menerimanya sama sekali.
-      // Ini menjelaskan DUA bug sekaligus:
-      //  1) safe-area selalu 0 -> topbar mepet notch & space kosong di
-      //     bawah bottom-nav (var(--so-safe-top/bottom) tidak pernah
-      //     terisi karena pesannya tidak pernah sampai).
-      //  2) kamera scan "nyala tapi tidak react" -> hasil scan dari popup
-      //     scanner.html direlay index.html turun ke frame.contentWindow,
-      //     tapi listener so_scan_result di JavaScript.html (lapis kedua)
-      //     tidak pernah menerimanya, jadi barcode yang sudah ke-decode
-      //     seolah hilang begitu saja.
-      // FIX: kirim payload yang sama ke frame.contentWindow DAN ke semua
-      // iframe di dalamnya secara REKURSIF (tidak asal tebak cuma 1 atau
-      // 2 level, supaya tetap aman kalau Google mengubah struktur
-      // nesting-nya kapan saja). window.frames[i] boleh diakses lintas
-      // origin (cuma proxy referensi window, bukan baca isinya), jadi ini
-      // tidak melanggar batasan same-origin policy.
-      function postToAppFrameRecursive_(win, payload, depth) {
-        if (!win || depth > 4) return;
-        try { win.postMessage(payload, '*'); } catch (e) { /* abaikan */ }
-        try {
-          var frames = win.frames;
-          if (frames && frames.length) {
-            for (var i = 0; i < frames.length; i++) {
-              postToAppFrameRecursive_(frames[i], payload, depth + 1);
-            }
-          }
-        } catch (e) { /* abaikan */ }
-      }
-      function postToAppFrame(payload) {
-        if (frame.contentWindow) {
-          postToAppFrameRecursive_(frame.contentWindow, payload, 0);
-        }
-      }
-
       function sendSafeArea() {
         try {
           var cs = getComputedStyle(document.getElementById('safeAreaProbe'));
@@ -386,7 +327,9 @@
             bottom: parseFloat(cs.bottom) || 0,
             left: parseFloat(cs.left) || 0
           };
-          postToAppFrame(payload);
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage(payload, '*');
+          }
         } catch (e) { /* aman diabaikan — tidak boleh sampai memutus app */ }
       }
 
@@ -408,62 +351,6 @@
       window.addEventListener('resize', sendSafeArea);
       window.addEventListener('orientationchange', function () {
         setTimeout(sendSafeArea, 300);
-      });
-
-      // ===== Relay jendela kamera Scan Barcode (khusus iOS) =====
-      // Kenapa perlu relay lewat sini: app SO (di dalam #appFrame, origin
-      // script.googleusercontent.com) TIDAK BISA langsung window.open()
-      // atau bikin iframe kamera sendiri di iOS — WebKit/Safari
-      // memblokir akses kamera (getUserMedia) kalau diminta dari
-      // konteks iframe cross-origin bersarang. Dokumen INI (index.html)
-      // origin-nya SAMA PERSIS dengan scanner.html (satu-satunya alasan
-      // kenapa ini bisa jadi solusinya), jadi saat app SO minta lewat
-      // postMessage, index.html inilah yang benar-benar memanggil
-      // window.open('scanner.html', ...) dari konteksnya sendiri —
-      // hasilnya popup top-level yang sah dengan izin kamera normal,
-      // persis seperti buka scanner.html langsung lewat Safari. Setelah
-      // itu pesan dua arah (hasil scan / error / batal) diteruskan
-      // bolak-balik lewat sini. Tidak berlaku & tidak dipakai sama
-      // sekali di Android/desktop (app SO di sana tetap window.open()
-      // langsung tanpa relay, lihat startScanBarcodeCamera di
-      // JavaScript.html).
-      var _scannerPopup = null;
-      window.addEventListener('message', function (event) {
-        var data = event && event.data;
-        if (!data || typeof data !== 'object') return;
-
-        if (data.type === 'so_request_scanner_popup') {
-          try {
-            _scannerPopup = window.open('scanner.html', 'soScanner', 'toolbar=no,location=no,menubar=no,status=no,scrollbars=no');
-            if (_scannerPopup) { try { _scannerPopup.focus(); } catch (e) {} }
-          } catch (e) { _scannerPopup = null; }
-          if (frame.contentWindow) {
-            frame.contentWindow.postMessage({ type: 'so_scanner_popup_result', ok: !!_scannerPopup }, '*');
-          }
-          return;
-        }
-
-        if (data.type === 'so_scan_relay_to_popup') {
-          // Pesan DARI app SO (lewat iframe #appFrame), diteruskan KE popup.
-          if (_scannerPopup && !_scannerPopup.closed) {
-            try { _scannerPopup.postMessage(data.payload, '*'); } catch (e) {}
-          }
-          return;
-        }
-
-        if (data.type === 'so_scan_result' || data.type === 'so_scan_error' || data.type === 'so_scan_cancel') {
-          // Pesan DARI popup kamera (window.opener-nya = dokumen ini),
-          // diteruskan TURUN ke app SO di dalam iframe — pakai
-          // postToAppFrame (rekursif ke semua lapis iframe) supaya
-          // benar-benar sampai ke listener so_scan_result di
-          // JavaScript.html, bukan cuma nyangkut di lapis iframe
-          // terluar seperti sebelumnya (itu penyebab "kamera nyala
-          // tapi tidak react" saat barcode berhasil di-scan).
-          if (event.source === _scannerPopup) {
-            postToAppFrame(data);
-          }
-          return;
-        }
       });
     })();
   </script>
