@@ -3793,10 +3793,6 @@
     max-width: calc(100vw - 48px);
     animation: loadingPillIn .22s var(--ease);
   }
-  /* Fade-out: background TETAP solid (tidak transparan) supaya tidak
-     "bleed through" dengan konten di baliknya (mis. login page) — yang
-     memudar cuma isi splash (logo/ring/teks) lewat opacity anak-anaknya. */
-  .loading-overlay.loading-overlay-fadeout > * { opacity: 0; transition: opacity .2s var(--ease); }
   @keyframes loadingPillIn { from { transform: translateY(-10px) scale(.94); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
   .loading-overlay .loading-app-name { display: none; }
   .spinner {
