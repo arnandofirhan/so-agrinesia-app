@@ -1294,18 +1294,17 @@ async function refreshNotifBadge() {
 }
 
 function checkSession() {
+  // Splash HTML awal (#loadingOverlay) DIHAPUS atas permintaan — sekarang
+  // overlay langsung disembunyikan seketika begitu checkSession jalan, jadi
+  // yang terlihat cuma splash native Android (dari manifest/theme_color)
+  // lalu langsung ke halaman login/dashboard tanpa lapisan HTML tambahan.
+  hideLoading();
   const saved = sessionStorage.getItem('so_user');
   if (saved) {
-    showSplashText('Memuat aplikasi...');
-    setTimeout(hideLoading, 15000);
     try {
       CURRENT_USER = JSON.parse(saved);
       enterApp();
-    } catch (e) {
-      hideLoading();
-    }
-  } else {
-    hideLoading();
+    } catch (e) {}
   }
 }
 if (document.readyState === 'complete') {
