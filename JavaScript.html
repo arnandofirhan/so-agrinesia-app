@@ -9158,14 +9158,22 @@ function toggleCategoryStatusAction(categoryId, nama) {
 }
 
 (function setupPullToRefresh() {
-  const THRESHOLD = 72;       
-  const MAX_PULL = 120;       
+  const THRESHOLD = 90;
+  const MAX_PULL = 130;
+  // Jarak minimum gerakan jari mentah (piksel layar, sebelum dikali redaman
+  // 0.5) sebelum indikator PTR mulai muncul sama sekali. Ini mencegah PTR
+  // ke-trigger cuma dari scroll biasa yang baru mulai dari posisi paling
+  // atas — user harus benar-benar menarik turun, bukan sekadar scroll.
+  const DRAG_START_PX = 24;
 
   let startY = 0;
+  let startX = 0;
   let pulling = false;
   let currentPull = 0;
   let indicator = null;
   let iconEl = null;
+  let directionLocked = false;
+  let isVerticalPull = false;
 
   function ensureIndicator() {
     if (indicator) return indicator;
@@ -9197,13 +9205,29 @@ function toggleCategoryStatusAction(categoryId, nama) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay && !overlay.classList.contains('hidden')) return;
     startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
     pulling = true;
     currentPull = 0;
+    directionLocked = false;
+    isVerticalPull = false;
   }, { passive: true });
 
   document.addEventListener('touchmove', function(e) {
     if (!pulling || e.touches.length !== 1) return;
     const dy = e.touches[0].clientY - startY;
+    const dx = e.touches[0].clientX - startX;
+
+    // Kunci arah gesture begitu jari sudah bergerak sedikit — kalau
+    // gerakannya lebih condong horizontal (swipe kiri/kanan) atau baru
+    // sedikit sekali, jangan anggap ini pull-to-refresh.
+    if (!directionLocked) {
+      if (Math.abs(dy) < DRAG_START_PX && Math.abs(dx) < DRAG_START_PX) return;
+      directionLocked = true;
+      isVerticalPull = Math.abs(dy) > Math.abs(dx) * 1.2;
+      if (!isVerticalPull) { pulling = false; currentPull = 0; return; }
+    }
+    if (!isVerticalPull) return;
+
     if (dy <= 0) { currentPull = 0; return; }
     if (!atPageTop()) { pulling = false; currentPull = 0; return; }
 
@@ -9226,10 +9250,10 @@ function toggleCategoryStatusAction(categoryId, nama) {
   }
 
   document.addEventListener('touchend', function() {
-    if (!pulling) return;
+    if (!pulling) { directionLocked = false; isVerticalPull = false; return; }
     pulling = false;
     const visualPull = Math.min(currentPull * 0.5, MAX_PULL);
-    if (visualPull >= THRESHOLD) {
+    if (isVerticalPull && visualPull >= THRESHOLD) {
       if (indicator) {
         indicator.classList.add('loading');
         indicator.style.transform = 'translateY(' + (THRESHOLD * 0.7) + 'px)';
@@ -9242,11 +9266,15 @@ function toggleCategoryStatusAction(categoryId, nama) {
       resetIndicator();
     }
     currentPull = 0;
+    directionLocked = false;
+    isVerticalPull = false;
   }, { passive: true });
 
   document.addEventListener('touchcancel', function() {
     pulling = false;
     currentPull = 0;
+    directionLocked = false;
+    isVerticalPull = false;
     resetIndicator();
   }, { passive: true });
 })();
