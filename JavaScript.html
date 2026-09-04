@@ -1135,7 +1135,7 @@ function enterApp() {
   navigateTo('dashboard');
   getItemMasterCached().catch(function() {});
 
-  hideLoading();
+  hideLoadingWithMinDuration_();
   refreshNotifBadge();
   const startPrefetch = function() {
     if (!CURRENT_USER) return; 
@@ -1289,6 +1289,20 @@ async function refreshNotifBadge() {
   }
 }
 
+// Splash minimal tampil sekian ms supaya tidak "kedip" (0 detik) saat app
+// dibuka dari homescreen — terutama saat user BELUM login, di mana dulu
+// hideLoading() langsung dipanggil seketika tanpa jeda sama sekali.
+var SPLASH_MIN_DURATION_MS = 550;
+var _splashShownAt = Date.now();
+function hideLoadingWithMinDuration_() {
+  var elapsed = Date.now() - _splashShownAt;
+  var remaining = SPLASH_MIN_DURATION_MS - elapsed;
+  if (remaining > 0) {
+    setTimeout(hideLoading, remaining);
+  } else {
+    hideLoading();
+  }
+}
 function checkSession() {
   const saved = sessionStorage.getItem('so_user');
   if (saved) {
@@ -1298,10 +1312,10 @@ function checkSession() {
       CURRENT_USER = JSON.parse(saved);
       enterApp();
     } catch (e) {
-      hideLoading();
+      hideLoadingWithMinDuration_();
     }
   } else {
-    hideLoading();
+    hideLoadingWithMinDuration_();
   }
 }
 if (document.readyState === 'complete') {
