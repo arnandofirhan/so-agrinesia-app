@@ -9310,6 +9310,33 @@ function toggleCategoryStatusAction(categoryId, nama) {
   // atas — user harus benar-benar menarik turun, bukan sekadar scroll.
   const DRAG_START_PX = 24;
 
+  // FIX: sebelumnya `window._dashboardReflowing` cuma di-set true secara
+  // manual di beberapa titik tertentu (load awal dashboard, ganti toggle
+  // Mingguan/Bulanan). Tapi banyak hal LAIN yang juga bikin tinggi halaman
+  // berubah mendadak — grafik Chart.js yang baru selesai digambar, toggle
+  // Frekuensi/Value di Top 10 Item, kartu "Grafik tidak dapat dimuat" yang
+  // muncul, dsb — dan semua itu TIDAK di-guard, jadi scroll bisa
+  // "melompat" balik ke posisi atas persis saat jari masih menyentuh
+  // layar, membuat PTR ke-trigger walau user sebenarnya sedang scroll di
+  // tengah/bawah halaman (bukan menarik dari atas).
+  // Solusinya: pasang ResizeObserver global di #pageContent. Setiap kali
+  // tinggi konten berubah (apa pun penyebabnya), flag reflow dinyalakan
+  // sesaat (debounce ~400ms) supaya PTR menahan diri dulu.
+  let reflowResetTimer = null;
+  function markReflowing() {
+    window._dashboardReflowing = true;
+    clearTimeout(reflowResetTimer);
+    reflowResetTimer = setTimeout(function() {
+      window._dashboardReflowing = false;
+    }, 400);
+  }
+  (function watchContentReflow() {
+    const target = document.getElementById('pageContent') || document.body;
+    if (!target || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(function() { markReflowing(); });
+    ro.observe(target);
+  })();
+
   let startY = 0;
   let startX = 0;
   let pulling = false;
