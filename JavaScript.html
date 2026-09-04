@@ -4960,7 +4960,7 @@ async function exportSoFormExcel(soId) {
   const colHarga = XLSX.utils.encode_col(idxHarga);
   const colSelisihQty = XLSX.utils.encode_col(idxSelisihQty);
   const colSelisihRp = XLSX.utils.encode_col(idxSelisihRp);
-  const FORMAT_RP = '"Rp" #,##0;"Rp" -#,##0;"Rp" -';
+  const FORMAT_RP = '"Rp"* #,##0;"Rp"* -#,##0;"Rp"* -';
 
   // Range baris data (per kategori, EXCLUDING baris subtotal) dipakai untuk
   // rumus SUM di baris subtotal, dan dikumpulkan lagi untuk rumus SUM di
