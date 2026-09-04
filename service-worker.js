@@ -10,13 +10,18 @@
  *      Google Sheets sendiri TETAP SELALU live lewat JSONP ke GAS, TIDAK
  *      di-cache di sini (supaya stok/SO yang ditampilkan tidak basi).
  *
- * CACHE_VERSION: naikkan angka ini (v1 -> v2 -> ...) setiap kali kamu
- * deploy ulang JavaScript.html/Stylesheet.html/index.html, supaya user
- * lama otomatis mendapat versi baru (bukan versi cache basi) tanpa perlu
- * uninstall PWA.
+ * CACHE_VERSION: WAJIB naikkan angka ini (v1 -> v2 -> v3 -> ...) SETIAP
+ * KALI kamu push perubahan ke index.html/Stylesheet.html/JavaScript.html/
+ * Logo.html/api-bridge.js/manifest.json/icon-*.png — bukan cuma sekali di
+ * awal project. Kalau lupa dinaikkan, HP user (termasuk HP kamu sendiri)
+ * akan TETAP memakai file versi lama dari cache walau file baru sudah ada
+ * di GitHub, karena strategi di bawah ini cache-first (bukan network-first)
+ * untuk urusan kecepatan. Ini persis penyebab "Logo.html sudah dipush tapi
+ * splash tetap kosong" — versi cache tidak berubah jadi service worker
+ * merasa tidak perlu ambil ulang dari jaringan.
  * ======================================================================
  */
-var CACHE_VERSION = 'so-shell-v1';
+var CACHE_VERSION = 'so-shell-v2';
 var SHELL_ASSETS = [
   './index.html',
   './Stylesheet.html',
