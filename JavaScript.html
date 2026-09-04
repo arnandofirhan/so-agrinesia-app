@@ -1211,7 +1211,7 @@ async function runPrefetchQueue() {
       await itemPromise;
       const doneIdx = _PREFETCH_QUEUE.indexOf(item);
       if (doneIdx !== -1) _PREFETCH_QUEUE.splice(doneIdx, 1);
-      await new Promise(function(resolve) { setTimeout(resolve, 600); });
+      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
     } catch (e) {
     } finally {
       _PREFETCH_ITEM_INFLIGHT = null;
@@ -1505,12 +1505,10 @@ function navigateTo(page, params) {
     });
     return;
   }
-  if (_PREFETCH_ITEM_INFLIGHT) {
-    _PREFETCH_ITEM_INFLIGHT.finally(function() {
-      navigateToNow(page, params);
-    });
-    return;
-  }
+  // Jangan tunggu prefetch background selesai — itu cuma pemanasan cache
+  // untuk halaman lain, bukan sesuatu yang boleh menunda navigasi user yang
+  // sedang menunggu. navigateToNow() sendiri sudah menaikkan _PREFETCH_TOKEN
+  // di awal, yang otomatis menghentikan loop prefetch di iterasi berikutnya.
   navigateToNow(page, params);
 }
 
