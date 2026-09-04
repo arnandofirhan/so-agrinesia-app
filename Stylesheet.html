@@ -299,6 +299,12 @@
     transition: background .2s var(--ease), color .2s var(--ease);
     overflow-x: hidden;
   }
+  /* Fallback warna body saat login page tampil: kalau ada celah viewport
+     (mis. gesture nav bar Android yang tidak konsisten dihitung 100vh),
+     yang mengintip di baliknya hijau tua senada, bukan abu-abu terang. */
+  body:has(> #loginPage:not(.hidden)) {
+    background: #08341a;
+  }
 
   .app-shell, .main-wrapper, .content,
   .stat-grid, .stat-card, .card,
@@ -346,6 +352,7 @@
 
   .login-page {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -355,6 +362,7 @@
       radial-gradient(900px 700px at 100% 110%, rgba(255,255,255,0.08), transparent 55%),
       linear-gradient(150deg, #0f7a37 0%, #0a5c29 45%, #08341a 100%);
     padding: 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     overflow: hidden;
   }
   .login-page::before {
