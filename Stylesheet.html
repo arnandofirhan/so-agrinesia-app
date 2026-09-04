@@ -2153,6 +2153,55 @@
   .text-right { text-align: right; }
   .text-center { text-align: center; }
 
+  /* FIX: tabel Stock Opname (halaman utama, 11 kolom) suka kepotong dan
+     butuh scroll horizontal di layar desktop yang tidak terlalu lebar,
+     karena padding sel default (16px) + white-space:nowrap di semua kolom
+     bikin total lebar tabel lebih besar dari container. Dipersempit
+     khusus untuk tabel ini saja (tidak mempengaruhi tabel lain), dan
+     kolom "Store" & "Dibuat Oleh" dibolehkan wrap 2 baris supaya tidak
+     memaksa lebar ekstra dari nama toko/user yang panjang. Dibatasi ke
+     desktop saja (>900px) supaya tidak bentrok dengan mode kartu di
+     mobile (lihat @media max-width:900px di bawah). */
+  @media (min-width: 901px) {
+    .table-card-generic-so.table-card-generic {
+      table-layout: fixed;
+    }
+    .table-card-generic-so.table-card-generic thead th,
+    .table-card-generic-so.table-card-generic tbody td {
+      padding-left: 8px;
+      padding-right: 8px;
+      font-size: 12.5px;
+    }
+    .table-card-generic-so.table-card-generic td[data-label="Store"],
+    .table-card-generic-so.table-card-generic td[data-label="Dibuat Oleh"] {
+      white-space: normal;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .table-card-generic-so.table-card-generic th:nth-child(1),
+    .table-card-generic-so.table-card-generic td:nth-child(1) { width: 12%; }
+    .table-card-generic-so.table-card-generic th:nth-child(2),
+    .table-card-generic-so.table-card-generic td:nth-child(2) { width: 12%; }
+    .table-card-generic-so.table-card-generic th:nth-child(3),
+    .table-card-generic-so.table-card-generic td:nth-child(3) { width: 8%; }
+    .table-card-generic-so.table-card-generic th:nth-child(4),
+    .table-card-generic-so.table-card-generic td:nth-child(4) { width: 6%; }
+    .table-card-generic-so.table-card-generic th:nth-child(5),
+    .table-card-generic-so.table-card-generic td:nth-child(5) { width: 9%; }
+    .table-card-generic-so.table-card-generic th:nth-child(6),
+    .table-card-generic-so.table-card-generic td:nth-child(6) { width: 8%; }
+    .table-card-generic-so.table-card-generic th:nth-child(7),
+    .table-card-generic-so.table-card-generic td:nth-child(7) { width: 8%; }
+    .table-card-generic-so.table-card-generic th:nth-child(8),
+    .table-card-generic-so.table-card-generic td:nth-child(8) { width: 10%; }
+    .table-card-generic-so.table-card-generic th:nth-child(9),
+    .table-card-generic-so.table-card-generic td:nth-child(9) { width: 10%; }
+    .table-card-generic-so.table-card-generic th:nth-child(10),
+    .table-card-generic-so.table-card-generic td:nth-child(10) { width: 8%; }
+    .table-card-generic-so.table-card-generic th:nth-child(11),
+    .table-card-generic-so.table-card-generic td:nth-child(11) { width: 9%; }
+  }
+
   .table-compact thead th { padding: 10px 14px; font-size: 10.5px; }
   .table-compact tbody td { padding: 8px 14px; height: 38px; font-size: 12.5px; }
   .rank-badge {
