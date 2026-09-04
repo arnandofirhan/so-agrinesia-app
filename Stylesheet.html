@@ -277,12 +277,16 @@
   .topbar-icon-btn svg { width: 18px; height: 18px; }
   .topbar-icon-badge {
     position: absolute; top: -2px; right: -2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-width: 16px; height: 16px; padding: 0 3px;
     border-radius: 999px;
     background: var(--red);
     color: #fff;
-    font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+    font-size: 10px; font-weight: 700; line-height: 1; text-align: center;
     border: 2px solid var(--white);
+    box-sizing: border-box;
   }
   .topbar-divider { width: 1px; height: 26px; background: var(--gray-200); margin: 0 2px; flex-shrink: 0; }
 
