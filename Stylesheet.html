@@ -3792,7 +3792,10 @@
     padding: 10px 22px 10px 10px;
     max-width: calc(100vw - 48px);
     animation: loadingPillIn .22s var(--ease);
+    opacity: 1;
+    transition: opacity .2s var(--ease);
   }
+  .loading-overlay.loading-overlay-fadeout { opacity: 0; }
   @keyframes loadingPillIn { from { transform: translateY(-10px) scale(.94); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
   .loading-overlay .loading-app-name { display: none; }
   .spinner {
