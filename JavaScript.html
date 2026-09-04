@@ -833,7 +833,17 @@ function showLoading(text) {
   overlay.classList.remove('loading-overlay-fullscreen');
 }
 function hideLoading() {
-  document.getElementById('loadingOverlay').classList.add('hidden');
+  const overlay = document.getElementById('loadingOverlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  // Fade out cepat TANPA membuat overlay tembus pandang (supaya konten di
+  // baliknya, mis. login page, tidak "bleed through" / terlihat dobel
+  // selama transisi). Yang di-fade cuma isi splash (logo/teks), background
+  // hijau tetap solid sampai detik terakhir baru langsung disembunyikan.
+  overlay.classList.add('loading-overlay-fadeout');
+  setTimeout(function() {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('loading-overlay-fadeout');
+  }, 260);
 }
 function showSplashText(text) {
   const el = document.getElementById('loadingText');
@@ -1292,7 +1302,7 @@ async function refreshNotifBadge() {
 // Splash minimal tampil sekian ms supaya tidak "kedip" (0 detik) saat app
 // dibuka dari homescreen — terutama saat user BELUM login, di mana dulu
 // hideLoading() langsung dipanggil seketika tanpa jeda sama sekali.
-var SPLASH_MIN_DURATION_MS = 550;
+var SPLASH_MIN_DURATION_MS = 1100;
 var _splashShownAt = Date.now();
 function hideLoadingWithMinDuration_() {
   var elapsed = Date.now() - _splashShownAt;
