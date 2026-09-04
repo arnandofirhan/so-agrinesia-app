@@ -21,7 +21,7 @@
  * merasa tidak perlu ambil ulang dari jaringan.
  * ======================================================================
  */
-var CACHE_VERSION = 'so-shell-v5';
+var CACHE_VERSION = 'so-shell-v6';
 var SHELL_ASSETS = [
   './index.html',
   './Stylesheet.html',
