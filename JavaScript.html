@@ -181,26 +181,33 @@ async function warmSoDataCache() {
   const lastMonday = new Date(thisMonday); lastMonday.setDate(lastMonday.getDate() - 7);
   const lastSunday = new Date(thisMonday); lastSunday.setDate(lastSunday.getDate() - 1);
 
+  // FIX: sebelumnya semua job prefetch ini ditembak BARENGAN lewat
+  // Promise.all (8 fungsi server x 2 tipeSo = sampai 16 request JSONP
+  // sekaligus, pas banget sama waktu dashboard utama juga lagi loading).
+  // Di koneksi yang lemot/tidak stabil ini gampang bikin sebagian request
+  // timeout -> muncul toast "Gagal menghubungi server". Sekarang job
+  // dijalankan BERURUTAN (satu-satu, dikasih jeda), supaya tidak berebut
+  // bandwidth/kuota eksekusi dengan request utama yang sedang ditunggu user.
   const jobs = [
-    prefetchBothTipeSoNow('dashboard', 'dashboard', 'getDashboardData', function(tipe) {
+    function() { return prefetchBothTipeSoNow('dashboard', 'dashboard', 'getDashboardData', function(tipe) {
       const p = { currentUser: CURRENT_USER, tipeSo: tipe };
       if (needsStorePicker()) { p.store = ''; p.tanggal = ''; }
       return p;
-    }),
-    prefetchBothTipeSoNow('dashboard', 'tren', 'getTrendData', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('dashboard', 'tren', 'getTrendData', function(tipe) {
       const p = { currentUser: CURRENT_USER, tipeSo: tipe };
       if (needsStorePicker()) p.store = '';
       return p;
-    }),
-    prefetchBothTipeSoNow('dashboard', 'soList', 'getSoListForStore', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('dashboard', 'soList', 'getSoListForStore', function(tipe) {
       return { currentUser: CURRENT_USER, statusFilter: 'selesai', tipeSo: tipe };
-    }),
-    prefetchBothTipeSoNow('stockOpname', 'soList', 'getSoListForStore', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('stockOpname', 'soList', 'getSoListForStore', function(tipe) {
       const p = { currentUser: CURRENT_USER, statusFilter: 'active', tipeSo: tipe, search: '' };
       if (needsStorePicker()) p.store = '';
       return p;
-    }),
-    prefetchBothTipeSoNow('riwayat', 'soList', 'getSoListForStore', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('riwayat', 'soList', 'getSoListForStore', function(tipe) {
       const p = { currentUser: CURRENT_USER, statusFilter: 'selesai', tipeSo: tipe, search: '' };
       if (needsStorePicker()) p.store = '';
       p.tanggalMulai = '';
@@ -208,23 +215,23 @@ async function warmSoDataCache() {
       p.selisihType = '';
       p.sortBy = 'terbaru';
       return p;
-    }),
-    prefetchBothTipeSoNow('laporan', 'laporanData', 'getLaporanData', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('laporan', 'laporanData', 'getLaporanData', function(tipe) {
       const p = { currentUser: CURRENT_USER, tipeSo: tipe };
       if (needsStorePicker()) p.store = '';
       p.tanggalMulai = toDateInput(firstOfMonth);
       p.tanggalAkhir = toDateInput(today);
       return p;
-    }),
-    prefetchBothTipeSoNow('auditSelisih', 'auditSelisih', 'getAuditSelisihBerulang', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('auditSelisih', 'auditSelisih', 'getAuditSelisihBerulang', function(tipe) {
       const p = { currentUser: CURRENT_USER, tipeSo: tipe };
       if (needsStorePicker()) p.store = '';
       p.tanggalMulai = toDateInput(firstOfMonth);
       p.tanggalAkhir = toDateInput(today);
       p.minOccurrence = '2';
       return p;
-    }),
-    prefetchBothTipeSoNow('perbandinganPeriode', 'perbandinganPeriode', 'getPerbandinganAntarPeriode', function(tipe) {
+    }); },
+    function() { return prefetchBothTipeSoNow('perbandinganPeriode', 'perbandinganPeriode', 'getPerbandinganAntarPeriode', function(tipe) {
       const p = { currentUser: CURRENT_USER, tipeSo: tipe };
       if (needsStorePicker()) p.store = '';
       p.periode1Mulai = toDateInput(lastMonday);
@@ -232,9 +239,14 @@ async function warmSoDataCache() {
       p.periode2Mulai = toDateInput(thisMonday);
       p.periode2Akhir = toDateInput(today);
       return p;
-    })
+    }); }
   ];
-  try { await Promise.all(jobs); } catch (e) {  }
+
+  for (let i = 0; i < jobs.length; i++) {
+    if (!CURRENT_USER) return;
+    try { await jobs[i](); } catch (e) { }
+    await new Promise(function(resolve) { setTimeout(resolve, 500); });
+  }
 }
 
 const ROLE_ADMIN = 'ADMIN';
@@ -963,9 +975,9 @@ function todayStr() {
 
 function callServer(functionName, args, opts) {
   opts = opts || {};
-  const maxRetries = opts.maxRetries !== undefined ? opts.maxRetries : 2;
-  const retryDelayMs = 700;
-  const attemptTimeoutMs = opts.timeoutMs || 8000;
+  const maxRetries = opts.maxRetries !== undefined ? opts.maxRetries : 3;
+  const retryDelayMs = 900;
+  const attemptTimeoutMs = opts.timeoutMs || 15000;
 
   function runOnce() {
     return new Promise(function(resolve, reject) {
