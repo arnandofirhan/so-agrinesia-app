@@ -489,13 +489,19 @@
     // Isi semua elemen logo dengan base64 dari Logo.html (satu sumber saja,
     // supaya string base64 tidak perlu diulang manual di banyak tempat).
     (function() {
+      // Fallback: kalau Logo.html belum ada/gagal dimuat, pakai icon-192.png
+      // (file statis yang sudah ada untuk manifest PWA) supaya logo tidak
+      // tampil kosong/broken — cuma sedikit kurang tajam dibanding base64
+      // asli, tapi jauh lebih baik daripada gambar rusak.
+      const logoSrc = (typeof AGRINESIA_LOGO_B64 !== 'undefined')
+        ? AGRINESIA_LOGO_B64
+        : 'icon-192.png';
       if (typeof AGRINESIA_LOGO_B64 === 'undefined') {
-        console.warn('AGRINESIA_LOGO_B64 belum terdefinisi (Logo.html belum ada/gagal dimuat) — logo akan tampil kosong sampai file itu ditambahkan.');
-        return;
+        console.warn('AGRINESIA_LOGO_B64 belum terdefinisi (Logo.html belum ada/gagal dimuat) — pakai icon-192.png sebagai fallback sampai Logo.html ditambahkan.');
       }
       ['loadingLogo', 'loginLogoImg', 'sidebarLogoImg'].forEach(function(id) {
         const el = document.getElementById(id);
-        if (el) el.src = AGRINESIA_LOGO_B64;
+        if (el) el.src = logoSrc;
       });
     })();
   </script>
