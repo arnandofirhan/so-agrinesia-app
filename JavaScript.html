@@ -7076,8 +7076,10 @@ function getLaporanParams() {
   if (needsStorePicker() && document.getElementById('lapStoreFilter')) {
     params.store = document.getElementById('lapStoreFilter').value;
   }
-  params.tanggalMulai = document.getElementById('lapTanggalMulai').value;
-  params.tanggalAkhir = document.getElementById('lapTanggalAkhir').value;
+  const elMulai = document.getElementById('lapTanggalMulai');
+  const elAkhir = document.getElementById('lapTanggalAkhir');
+  params.tanggalMulai = elMulai ? elMulai.value : '';
+  params.tanggalAkhir = elAkhir ? elAkhir.value : '';
   return params;
 }
 
@@ -7117,6 +7119,7 @@ async function loadLaporanData(force) {
 
 function renderLaporanData(d) {
   const statGrid = document.getElementById('lapStatGrid');
+  if (!statGrid) return; // halaman/buffer prefetch sudah dilepas sebelum data ini datang - aman diabaikan
   const p = getLaporanParams();
   const storeClause = (p.store ? "presetStore:'" + p.store.replace(/'/g, "\\'") + "'," : '');
   const dateClause = "presetDateStart:'" + p.tanggalMulai + "',presetDateEnd:'" + p.tanggalAkhir + "',";
@@ -7294,9 +7297,9 @@ async function loadAuditSelisihData(force) {
   if (needsStorePicker() && document.getElementById('auditStoreFilter')) {
     params.store = document.getElementById('auditStoreFilter').value;
   }
-  params.tanggalMulai = document.getElementById('auditTanggalMulai').value;
-  params.tanggalAkhir = document.getElementById('auditTanggalAkhir').value;
-  params.minOccurrence = document.getElementById('auditMinOccurrence').value;
+  params.tanggalMulai = document.getElementById('auditTanggalMulai') ? document.getElementById('auditTanggalMulai').value : '';
+  params.tanggalAkhir = document.getElementById('auditTanggalAkhir') ? document.getElementById('auditTanggalAkhir').value : '';
+  params.minOccurrence = document.getElementById('auditMinOccurrence') ? document.getElementById('auditMinOccurrence').value : '2';
 
   const cacheKey = 'auditSelisih:' + JSON.stringify(params);
   AUDIT_SELISIH_PAGE = 1;
@@ -7316,9 +7319,9 @@ async function loadAuditSelisihData(force) {
     if (needsStorePicker() && document.getElementById('auditStoreFilter')) {
       p.store = document.getElementById('auditStoreFilter').value;
     }
-    p.tanggalMulai = document.getElementById('auditTanggalMulai').value;
-    p.tanggalAkhir = document.getElementById('auditTanggalAkhir').value;
-    p.minOccurrence = document.getElementById('auditMinOccurrence').value;
+    p.tanggalMulai = document.getElementById('auditTanggalMulai') ? document.getElementById('auditTanggalMulai').value : '';
+    p.tanggalAkhir = document.getElementById('auditTanggalAkhir') ? document.getElementById('auditTanggalAkhir').value : '';
+    p.minOccurrence = document.getElementById('auditMinOccurrence') ? document.getElementById('auditMinOccurrence').value : '2';
     return p;
   });
 
@@ -7341,6 +7344,7 @@ function goToAuditSelisihPage(page) {
 
 function renderAuditSelisihData(d) {
   const statGrid = document.getElementById('auditStatGrid');
+  if (!statGrid) return; // halaman/buffer prefetch sudah dilepas sebelum data ini datang - aman diabaikan
   statGrid.innerHTML =
     '<div class="stat-card solid c-purple"><div class="stat-icon">' + ICONS.target + '</div><div><div class="stat-value">' + formatNumber(d.summary.totalItemBerulang) + '</div><div class="stat-label">Item Selisih Berulang</div></div></div>' +
     '<div class="stat-card solid c-blue"><div class="stat-icon">' + ICONS.store + '</div><div><div class="stat-value">' + formatNumber(d.summary.totalStoreTerdampak) + '</div><div class="stat-label">Store Terdampak</div></div></div>' +
@@ -7602,10 +7606,10 @@ async function loadPerbandinganPeriodeData(force) {
   if (needsStorePicker() && document.getElementById('banStoreFilter')) {
     params.store = document.getElementById('banStoreFilter').value;
   }
-  params.periode1Mulai = document.getElementById('banP1Mulai').value;
-  params.periode1Akhir = document.getElementById('banP1Akhir').value;
-  params.periode2Mulai = document.getElementById('banP2Mulai').value;
-  params.periode2Akhir = document.getElementById('banP2Akhir').value;
+  params.periode1Mulai = document.getElementById('banP1Mulai') ? document.getElementById('banP1Mulai').value : '';
+  params.periode1Akhir = document.getElementById('banP1Akhir') ? document.getElementById('banP1Akhir').value : '';
+  params.periode2Mulai = document.getElementById('banP2Mulai') ? document.getElementById('banP2Mulai').value : '';
+  params.periode2Akhir = document.getElementById('banP2Akhir') ? document.getElementById('banP2Akhir').value : '';
 
   const cacheKey = 'perbandinganPeriode:' + JSON.stringify(params);
   const cachedRes = !force ? peekCached(cacheKey) : null;
@@ -7625,10 +7629,10 @@ async function loadPerbandinganPeriodeData(force) {
     if (needsStorePicker() && document.getElementById('banStoreFilter')) {
       p.store = document.getElementById('banStoreFilter').value;
     }
-    p.periode1Mulai = document.getElementById('banP1Mulai').value;
-    p.periode1Akhir = document.getElementById('banP1Akhir').value;
-    p.periode2Mulai = document.getElementById('banP2Mulai').value;
-    p.periode2Akhir = document.getElementById('banP2Akhir').value;
+    p.periode1Mulai = document.getElementById('banP1Mulai') ? document.getElementById('banP1Mulai').value : '';
+    p.periode1Akhir = document.getElementById('banP1Akhir') ? document.getElementById('banP1Akhir').value : '';
+    p.periode2Mulai = document.getElementById('banP2Mulai') ? document.getElementById('banP2Mulai').value : '';
+    p.periode2Akhir = document.getElementById('banP2Akhir') ? document.getElementById('banP2Akhir').value : '';
     return p;
   });
 
@@ -7642,6 +7646,7 @@ async function loadPerbandinganPeriodeData(force) {
 
 function renderPerbandinganPeriodeData(d) {
   const summaryGrid = document.getElementById('banSummaryGrid');
+  if (!summaryGrid) return; // halaman/buffer prefetch sudah dilepas sebelum data ini datang - aman diabaikan
   summaryGrid.innerHTML =
     '<div class="card chart-card">' +
       '<div class="section-title">' + ICONS.clock + '<span>Periode 1 (' + d.periode1.start + ' s/d ' + d.periode1.end + ')</span></div>' +
