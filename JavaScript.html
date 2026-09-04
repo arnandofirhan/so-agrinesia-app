@@ -907,6 +907,60 @@ function skeletonTableRowsHtml(count, cols) {
   return html;
 }
 
+// FIX: skeleton generik di atas (garis putus-putus dalam 1 sel colspan)
+// cuma enak dilihat di tabel desktop. Begitu tabel berubah jadi kartu di
+// mobile (table-card-generic-so / table-riwayat-card), skeleton itu tetap
+// dirender sebagai grid tabel biasa (bukan bentuk kartu), jadi keliatan
+// berantakan/norak — persis kayak yang dikeluhkan. Dua fungsi di bawah ini
+// membangun skeleton dengan struktur <td data-label="..."> YANG SAMA PERSIS
+// dengan baris data asli, supaya CSS mode-kartu yang sudah ada otomatis
+// merapikannya jadi bentuk kartu (dengan shimmer), bukan cuma barisan garis.
+function skeletonSoListCardsHtml(count) {
+  let html = '';
+  for (let i = 0; i < (count || 5); i++) {
+    html += '<tr>' +
+      '<td data-label="SO ID" class="card-title"><div class="skeleton skeleton-line" style="width:70%"></div></td>' +
+      '<td data-label="Store"><div class="skeleton skeleton-line" style="width:60%"></div></td>' +
+      '<td data-label="Tanggal SO"><div class="skeleton skeleton-line" style="width:75px"></div></td>' +
+      '<td data-label="Total Item" class="text-center"><div class="skeleton skeleton-line" style="width:30px;margin-inline:auto"></div></td>' +
+      '<td data-label="Stock Sistem" class="text-right"><div class="skeleton skeleton-line" style="width:55px;margin-left:auto"></div></td>' +
+      '<td data-label="Stock Fisik" class="text-right"><div class="skeleton skeleton-line" style="width:55px;margin-left:auto"></div></td>' +
+      '<td data-label="Selisih Qty" class="text-right"><div class="skeleton skeleton-line" style="width:100%;height:22px"></div></td>' +
+      '<td data-label="Selisih Value" class="text-right"><div class="skeleton skeleton-line" style="width:100%;height:22px"></div></td>' +
+      '<td data-label="Dibuat Oleh"><div class="skeleton skeleton-line" style="width:65%"></div></td>' +
+      '<td data-label="Status"><div class="skeleton skeleton-badge"></div></td>' +
+      '<td data-label="Aksi" class="text-center sticky-col-right"><div class="action-btns" style="justify-content:center;">' +
+        '<div class="skeleton skeleton-icon-btn"></div><div class="skeleton skeleton-icon-btn"></div>' +
+      '</div></td>' +
+    '</tr>';
+  }
+  return html;
+}
+
+function skeletonRiwayatCardsHtml(count) {
+  let html = '';
+  for (let i = 0; i < (count || 5); i++) {
+    html += '<tr>' +
+      '<td data-label="SO ID"><div class="cell-lines">' +
+        '<div class="skeleton skeleton-line" style="width:65%"></div>' +
+        '<div class="skeleton skeleton-line" style="width:45%;height:9px"></div>' +
+      '</div></td>' +
+      '<td data-label="Store"><div class="skeleton skeleton-line" style="width:55%"></div></td>' +
+      '<td data-label="Sistem" class="text-right"><div class="skeleton skeleton-line" style="width:50px;margin-left:auto"></div></td>' +
+      '<td data-label="Fisik" class="text-right"><div class="skeleton skeleton-line" style="width:50px;margin-left:auto"></div></td>' +
+      '<td data-label="Rincian" class="text-center"><div class="skeleton skeleton-badge" style="margin-inline:auto"></div></td>' +
+      '<td data-label="Selisih Qty" class="text-right"><div class="skeleton skeleton-line" style="width:100%;height:22px"></div></td>' +
+      '<td data-label="Selisih Value" class="text-right value-cell"><div class="skeleton skeleton-line" style="width:100%;height:22px"></div></td>' +
+      '<td data-label="Status"><div class="skeleton skeleton-badge"></div></td>' +
+      '<td data-label="Approval Note"><div class="skeleton skeleton-line" style="width:70%"></div></td>' +
+      '<td data-label="Aksi" class="text-center sticky-col-right"><div class="row-actions">' +
+        '<div class="skeleton skeleton-icon-btn"></div><div class="skeleton skeleton-icon-btn"></div>' +
+      '</div></td>' +
+    '</tr>';
+  }
+  return html;
+}
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -2056,13 +2110,24 @@ async function renderDashboard() {
   // momen itu — akibatnya pull-to-refresh ke-trigger tanpa diminta. Flag
   // ini dipakai setupPullToRefresh() untuk menahan diri selama reflow ini
   // masih berlangsung.
+  // FIX "dashboard berat pas awal login": sebelumnya 3 pemanggilan data
+  // ini (stat grid + 2 grafik + aktivitas terbaru) ditembak BARENGAN detik
+  // itu juga user baru saja login — pas banget numpuk sama proses render
+  // halaman & (sebelumnya) proses login itu sendiri, jadi kerasa berat/lag
+  // terutama di HP yang kurang kencang. Sekarang stat grid (paling
+  // penting, bikin dashboard kerasa "sudah kebuka") dimuat duluan, baru
+  // 150ms kemudian grafik & aktivitas terbaru menyusul — mengurangi beban
+  // puncak di momen paling kritis (baru login) tanpa bikin total waktu
+  // muat jadi jauh lebih lama.
   window._dashboardReflowing = true;
-  Promise.allSettled([
-    loadDashboardData(),
-    loadTrenData(),
-    loadRecentActivity()
-  ]).finally(function() {
-    window._dashboardReflowing = false;
+  const dashMainJob = loadDashboardData();
+  const dashRestJob = new Promise(function(resolve) {
+    setTimeout(function() {
+      Promise.allSettled([loadTrenData(), loadRecentActivity()]).then(resolve);
+    }, 150);
+  });
+  Promise.allSettled([dashMainJob, dashRestJob]).finally(function() {
+    setTimeout(function() { window._dashboardReflowing = false; }, 200);
   });
   bindTipeSoToggle('dashboard', function() {
     window._dashboardReflowing = true;
@@ -3939,7 +4004,7 @@ async function renderStockOpname(params) {
     '</div>' +
     '<div class="table-wrapper"><div class="table-scroll"><table class="table-card-generic table-card-generic-so">' +
       '<thead><tr><th>SO ID</th><th>Store</th><th>Tanggal SO</th><th class="text-center">Total Item</th><th class="text-right">Stock Sistem</th><th class="text-right">Stock Fisik</th><th class="text-right">Selisih Qty</th><th class="text-right">Selisih Value</th><th>Dibuat Oleh</th><th>Status</th><th class="text-center sticky-col-right">Aksi</th></tr></thead>' +
-      '<tbody id="soTableBody">' + skeletonTableRowsHtml(6, 11) + '</tbody>' +
+      '<tbody id="soTableBody">' + skeletonSoListCardsHtml(6) + '</tbody>' +
     '</table></div></div>';
 
   if (document.getElementById('btnCreateSo')) {
@@ -4059,7 +4124,7 @@ async function loadSoTable(force) {
   } else {
     skeletonTimer = setTimeout(function() {
       const tbody = document.getElementById('soTableBody');
-      if (tbody) tbody.innerHTML = skeletonTableRowsHtml(4, 11);
+      if (tbody) tbody.innerHTML = skeletonSoListCardsHtml(4);
     }, 150);
   }
 
@@ -6433,7 +6498,7 @@ async function renderRiwayat(params) {
       '<thead><tr><th>SO ID</th><th>Store</th>' +
         '<th class="text-right">Sistem</th><th class="text-right">Fisik</th>' +
         '<th class="text-center">Rincian</th><th class="text-right">Selisih Qty</th><th class="text-right">Selisih Value</th><th>Status</th><th>Approval Note</th><th class="text-center sticky-col-right">Aksi</th></tr></thead>' +
-      '<tbody id="riwTableBody">' + skeletonTableRowsHtml(6, 12) + '</tbody>' +
+      '<tbody id="riwTableBody">' + skeletonRiwayatCardsHtml(6) + '</tbody>' +
       '<tfoot id="riwTableFoot"></tfoot>' +
     '</table></div></div>' +
     '<div class="pagination-bar" id="riwPaginationBar"></div>';
@@ -6733,7 +6798,7 @@ async function loadRiwayatTable(silentForce) {
         if (myToken !== PAGE_NAV_TOKEN) return;
         const tbody = document.getElementById('riwTableBody');
         const tfoot = document.getElementById('riwTableFoot');
-        if (tbody) tbody.innerHTML = skeletonTableRowsHtml(4, 12);
+        if (tbody) tbody.innerHTML = skeletonRiwayatCardsHtml(4);
         if (tfoot) tfoot.innerHTML = '';
       }, 150);
     }
