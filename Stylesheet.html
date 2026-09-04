@@ -5082,10 +5082,10 @@
       border-top: none;
     }
     .table-card-generic-so td[data-label="Aksi"] .action-btns {
-      justify-content: stretch; width: 100%; gap: 1px;
+      justify-content: stretch; width: 100%; gap: 8px;
       background: var(--gray-50);
       border-radius: 10px;
-      overflow: hidden;
+      overflow: visible;
       padding: 3px;
     }
     .table-card-generic-so td[data-label="Aksi"] .action-btns .icon-btn {
@@ -5093,11 +5093,16 @@
       width: auto; height: 34px;
       border-radius: 8px;
       background: var(--white);
-      box-shadow: var(--shadow-xs);
+      border: 1px solid var(--gray-100);
+      box-shadow: none;
     }
     .table-card-generic-so td[data-label="Aksi"] .action-btns .icon-btn.danger {
       color: var(--red);
     }
+  }
+  html[data-theme="dark"] .table-card-generic-so td[data-label="Aksi"] .action-btns .icon-btn {
+    background: var(--gray-50);
+    border-color: rgba(255,255,255,0.1);
   }
 
   .so-tabs {
