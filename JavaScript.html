@@ -4943,11 +4943,48 @@ async function exportSoFormExcel(soId) {
 
   const LABEL_MERGE_START = 1, LABEL_MERGE_END = 5;
 
+  // Kolom-kolom yang dibutuhkan untuk membangun RUMUS EXCEL Selisih Qty & Selisih Rp
+  // (bukan angka statis lagi), supaya kalau Qty Fisik diubah manual di Excel,
+  // Selisih Qty & Selisih Rp ikut ter-update otomatis.
+  const idxQtySistem = cols.findIndex(function(c) { return c.key === 'qtySistem'; });
+  const idxQtyFisikDepan = cols.findIndex(function(c) { return c.key === 'qtyFisikDepan'; });
+  const idxQtyFisikGudang = cols.findIndex(function(c) { return c.key === 'qtyFisikGudang'; });
+  const idxQtyFisik = cols.findIndex(function(c) { return c.key === 'qtyFisik'; });
+  const idxHarga = cols.findIndex(function(c) { return c.key === 'harga'; });
+  const idxSelisihQty = cols.findIndex(function(c) { return c.key === 'selisihQty'; });
+  const idxSelisihRp = cols.findIndex(function(c) { return c.key === 'selisihRp'; });
+  const colQtySistem = XLSX.utils.encode_col(idxQtySistem);
+  const colQtyFisikDepan = XLSX.utils.encode_col(idxQtyFisikDepan);
+  const colQtyFisikGudang = XLSX.utils.encode_col(idxQtyFisikGudang);
+  const colQtyFisik = XLSX.utils.encode_col(idxQtyFisik);
+  const colHarga = XLSX.utils.encode_col(idxHarga);
+  const colSelisihQty = XLSX.utils.encode_col(idxSelisihQty);
+  const colSelisihRp = XLSX.utils.encode_col(idxSelisihRp);
+  const FORMAT_RP = '"Rp" #,##0;"Rp" -#,##0;"Rp" -';
+
+  // Range baris data (per kategori, EXCLUDING baris subtotal) dipakai untuk
+  // rumus SUM di baris subtotal, dan dikumpulkan lagi untuk rumus SUM di
+  // baris grand total (supaya tidak double-count baris subtotal).
+  let catStartRow = null;
+  let catEndRow = null;
+  const allCatRanges = [];
+
   spec.rows.forEach(function(row, ri) {
     const excelRowIndex = headerRowIndex + 1 + ri;
+    const excelRowNum = excelRowIndex + 1; // 1-indexed, dipakai di alamat rumus (mis. L5)
     const rowType = row._rowType;
     const isSubtotal = rowType === 'subtotal';
     const isGrandtotal = rowType === 'grandtotal';
+    const isDataRow = !isSubtotal && !isGrandtotal;
+
+    if (isDataRow) {
+      if (catStartRow === null) catStartRow = excelRowNum;
+      catEndRow = excelRowNum;
+    } else if (isSubtotal) {
+      if (catStartRow !== null) allCatRanges.push([catStartRow, catEndRow]);
+      catStartRow = null;
+      catEndRow = null;
+    }
 
     if (isSubtotal || isGrandtotal) {
       ws['!merges'].push({ s: { r: excelRowIndex, c: LABEL_MERGE_START }, e: { r: excelRowIndex, c: LABEL_MERGE_END } });
@@ -4960,7 +4997,44 @@ async function exportSoFormExcel(soId) {
       const align = c.align || (isNumCol ? 'right' : 'left');
       let cellStyle = { alignment: { horizontal: align }, border: THIN_BORDER };
 
-      if (isNumCol) {
+      if (ci === idxQtyFisik) {
+        // Total Qty Fisik = Qty Fisik Depan + Qty Fisik Gudang
+        if (isDataRow) {
+          ws[addr] = { t: 'n', f: colQtyFisikDepan + excelRowNum + '+' + colQtyFisikGudang + excelRowNum, v: (typeof v === 'number' ? v : 0) };
+        } else if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colQtyFisik + r[0] + ':' + colQtyFisik + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colQtyFisik + r[0] + ':' + colQtyFisik + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+        }
+        cellStyle.numFmt = '#,##0';
+      } else if (ci === idxSelisihQty) {
+        // Selisih Qty = Total Qty Fisik - Qty Sistem
+        if (isDataRow) {
+          ws[addr] = { t: 'n', f: colQtyFisik + excelRowNum + '-' + colQtySistem + excelRowNum, v: (typeof v === 'number' ? v : 0) };
+        } else if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colSelisihQty + r[0] + ':' + colSelisihQty + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colSelisihQty + r[0] + ':' + colSelisihQty + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+        }
+        cellStyle.numFmt = '#,##0';
+      } else if (ci === idxSelisihRp) {
+        // Selisih Rp = Selisih Qty x Harga (untuk baris data); subtotal/grand
+        // total menjumlahkan Selisih Rp per baris di rentangnya masing-masing.
+        if (isDataRow) {
+          ws[addr] = { t: 'n', f: colSelisihQty + excelRowNum + '*' + colHarga + excelRowNum, v: (typeof v === 'number' ? v : 0) };
+        } else if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colSelisihRp + r[0] + ':' + colSelisihRp + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colSelisihRp + r[0] + ':' + colSelisihRp + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+        }
+        cellStyle.numFmt = FORMAT_RP;
+      } else if (isNumCol) {
         const n = typeof v === 'number' ? v : parseFloat(v);
         if (v === '' || v === null || v === undefined) {
           if (!ws[addr]) ws[addr] = { t: 's', v: '' };
