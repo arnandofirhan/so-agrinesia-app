@@ -5647,24 +5647,66 @@ function openImportStockModal() {
 
   document.getElementById('processImportStockBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
-    const res = await callServer('importStockToSo', { soId: CURRENT_SO_DETAIL.soId, rows: parsedRows, currentUser: CURRENT_USER }, { loadingText: 'Mengimport stock sistem...' });
-    if (res.success) {
-      const hasNotFound = res.stats && res.stats.notFound > 0;
-      showStatsToast(
-        'Import stock sistem selesai',
-        [
-          { label: 'Cocok', value: res.stats.matched },
-          { label: 'Tidak terdaftar', value: res.stats.notFound, warn: hasNotFound },
-          { label: 'Dilewati (stock 0)', value: res.stats.skippedZeroStock || null }
-        ],
-        hasNotFound ? 'error' : 'success'
-      );
-      invalidateCache(null, { tipeSo: CURRENT_SO_DETAIL.tipeSo }); 
-      closeModal();
-      renderSoDetail(CURRENT_SO_DETAIL.soId);
-    } else {
-      showToast(res.message, 'error');
+
+    // FIX: komunikasi ke backend sekarang lewat JSONP (lihat catatan di
+    // index_github.html), yaitu request GET dengan payload dimasukkan ke
+    // URL — punya batas panjang URL yang jauh lebih kecil dibanding POST
+    // biasa. File Stock Sistem toko besar bisa berisi ratusan/ribuan SKU,
+    // yang kalau dikirim sekaligus sebagai satu payload JSON di URL akan
+    // melebihi batas itu dan gagal dengan pesan "URL app bermasalah".
+    // Solusinya: pecah (chunk) rows jadi beberapa batch kecil dan kirim
+    // berurutan, lalu gabungkan hasil statistiknya di client.
+    const CHUNK_SIZE = 150;
+    const chunks = [];
+    for (let i = 0; i < parsedRows.length; i += CHUNK_SIZE) {
+      chunks.push(parsedRows.slice(i, i + CHUNK_SIZE));
     }
+
+    const btn = this;
+    btn.disabled = true;
+
+    let totalMatched = 0, totalNotFound = 0, totalSkippedZeroStock = 0;
+    let failed = false;
+
+    for (let i = 0; i < chunks.length; i++) {
+      showLoading(chunks.length > 1
+        ? 'Mengimport stock sistem... (batch ' + (i + 1) + '/' + chunks.length + ')'
+        : 'Mengimport stock sistem...');
+      let res;
+      try {
+        res = await callServer('importStockToSo', { soId: CURRENT_SO_DETAIL.soId, rows: chunks[i], currentUser: CURRENT_USER }, { silent: true });
+      } catch (err) {
+        failed = true;
+        break;
+      }
+      if (!res || !res.success) {
+        showToast((res && res.message) || 'Import gagal di batch ' + (i + 1) + '.', 'error');
+        failed = true;
+        break;
+      }
+      totalMatched += res.stats.matched || 0;
+      totalNotFound += res.stats.notFound || 0;
+      totalSkippedZeroStock += res.stats.skippedZeroStock || 0;
+    }
+
+    btn.disabled = false;
+    hideLoading();
+
+    if (failed) return;
+
+    const hasNotFound = totalNotFound > 0;
+    showStatsToast(
+      'Import stock sistem selesai',
+      [
+        { label: 'Cocok', value: totalMatched },
+        { label: 'Tidak terdaftar', value: totalNotFound, warn: hasNotFound },
+        { label: 'Dilewati (stock 0)', value: totalSkippedZeroStock || null }
+      ],
+      hasNotFound ? 'error' : 'success'
+    );
+    invalidateCache(null, { tipeSo: CURRENT_SO_DETAIL.tipeSo });
+    closeModal();
+    renderSoDetail(CURRENT_SO_DETAIL.soId);
   });
 }
 
