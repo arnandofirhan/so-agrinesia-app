@@ -856,6 +856,85 @@ function showSplashText(text) {
   if (el) el.textContent = text || 'Memuat aplikasi...';
 }
 
+// ---- Progress bar 0-100% untuk proses import data besar ----
+// Menggantikan popup lama yang cuma menunjukkan teks "batch X/Y" (kesan
+// kasar & tidak menunjukkan progres sebenarnya). Progress dihitung dari
+// JUMLAH BARIS yang sudah selesai diproses dibagi total baris di file,
+// jadi persen yang ditampilkan itu asli, bukan sekadar indeks batch.
+function showImportProgress(text) {
+  showLoading(text);
+  const wrap = document.getElementById('importProgressWrap');
+  if (wrap) wrap.classList.remove('hidden');
+  updateImportProgress(0);
+}
+function updateImportProgress(percent) {
+  const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  const fill = document.getElementById('importProgressFill');
+  const label = document.getElementById('importProgressPct');
+  if (fill) fill.style.width = pct + '%';
+  if (label) label.textContent = pct + '%';
+}
+function hideImportProgress() {
+  const wrap = document.getElementById('importProgressWrap');
+  if (wrap) wrap.classList.add('hidden');
+  hideLoading();
+}
+
+// ---- Import chunked generik dengan progress 0-100% asli ----
+// Dipakai oleh SEMUA proses import (Item Master, Barcode, Stock Sistem)
+// supaya perilakunya konsisten: berapapun jumlah baris di file (900, 5000,
+// dst), selalu dipecah otomatis jadi batch kecil yang aman dikirim (sekarang
+// lewat POST di api-bridge.js sehingga TIDAK ADA LAGI batas panjang URL
+// seperti skema JSONP/GET sebelumnya — chunking di sini semata-mata untuk
+// UX progress bar & supaya request per-batch tetap ringan/cepat, bukan lagi
+// untuk menghindari limit panjang URL).
+//
+// fnName        : nama fungsi backend (mis. 'importItemMaster')
+// allRows       : seluruh baris hasil parse file
+// buildParams   : function(chunkRows) -> object params yang dikirim ke server
+//                 (tempat menyisipkan soId/currentUser/barcodeOnly dst)
+// mergeStats    : function(totalStats, chunkStats) -> totalStats baru
+//                 (jumlahkan field-field statistik hasil per-chunk)
+// loadingLabel  : teks judul yang ditampilkan di atas progress bar
+//
+// Return: { success, message?, stats } — stats sudah tergabung dari semua
+// chunk. Kalau salah satu chunk gagal, proses dihentikan (chunk berikutnya
+// TIDAK dikirim) supaya tidak makin banyak yang diproses dalam keadaan
+// tidak jelas, dan pesan error chunk tsb yang ditampilkan ke user.
+async function runChunkedImport(fnName, allRows, buildParams, mergeStats, loadingLabel) {
+  const CHUNK_SIZE = 200;
+  const chunks = [];
+  for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
+    chunks.push(allRows.slice(i, i + CHUNK_SIZE));
+  }
+
+  showImportProgress(loadingLabel);
+
+  let totalStats = {};
+  let processedRows = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    let res;
+    try {
+      res = await callServer(fnName, buildParams(chunk), { silent: true, maxRetries: 2 });
+    } catch (err) {
+      hideImportProgress();
+      return { success: false, message: 'Import gagal: ' + (err && err.message ? err.message : 'kesalahan jaringan.') };
+    }
+    if (!res || !res.success) {
+      hideImportProgress();
+      return { success: false, message: (res && res.message) || ('Import gagal pada bagian ke-' + (i + 1) + '.') };
+    }
+    totalStats = mergeStats(totalStats, res.stats || {});
+    processedRows += chunk.length;
+    updateImportProgress((processedRows / allRows.length) * 100);
+  }
+
+  hideImportProgress();
+  return { success: true, stats: totalStats };
+}
+
 function brandSpinnerHtml(text) {
   return '<div class="page-loading">' +
     '<div class="brand-spinner brand-spinner-sm">' +
@@ -3523,24 +3602,53 @@ function openImportItemModal() {
 
   document.getElementById('processImportItemBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
-    const res = await callServer('importItemMaster', { rows: parsedRows, currentUser: CURRENT_USER }, { loadingText: 'Mengimport item master...' });
-    if (res.success) {
+    const btn = this;
+    btn.disabled = true;
+
+    // FIX UTAMA (import ~900 baris gagal): sebelumnya SELURUH rows dikirim
+    // dalam SATU request tanpa dipecah sama sekali — sekarang dipecah
+    // otomatis (runChunkedImport) sama seperti import Stock Sistem, plus
+    // progress bar 0-100% asli, dan karena api-bridge.js sudah pindah ke
+    // POST (bukan lagi GET/JSONP dengan payload di URL), tidak ada lagi
+    // batas jumlah baris yang bisa diimport dalam sekali proses.
+    const result = await runChunkedImport(
+      'importItemMaster',
+      parsedRows,
+      function(chunk) { return { rows: chunk, currentUser: CURRENT_USER }; },
+      function(total, chunkStats) {
+        return {
+          added: (total.added || 0) + (chunkStats.added || 0),
+          updated: (total.updated || 0) + (chunkStats.updated || 0),
+          alreadyExists: (total.alreadyExists || 0) + (chunkStats.alreadyExists || 0),
+          barcodeFilled: (total.barcodeFilled || 0) + (chunkStats.barcodeFilled || 0),
+          barcodeSkippedDup: (total.barcodeSkippedDup || 0) + (chunkStats.barcodeSkippedDup || 0),
+          skipped: (total.skipped || 0) + (chunkStats.skipped || 0),
+          duplicateInFile: (total.duplicateInFile || 0) + (chunkStats.duplicateInFile || 0)
+        };
+      },
+      'Mengimport item master...'
+    );
+
+    btn.disabled = false;
+
+    if (result.success) {
+      const stats = result.stats;
       showStatsToast(
         'Import item master selesai',
         [
-          { label: 'Ditambah', value: res.stats.added },
-          { label: 'SKU sudah ada (ditolak)', value: res.stats.alreadyExists > 0 ? res.stats.alreadyExists : null, warn: res.stats.alreadyExists > 0 },
-          { label: 'Barcode terisi ke item lama', value: res.stats.barcodeFilled > 0 ? res.stats.barcodeFilled : null },
-          { label: 'Barcode dilewati (sudah dipakai item lain)', value: res.stats.barcodeSkippedDup > 0 ? res.stats.barcodeSkippedDup : null, warn: res.stats.barcodeSkippedDup > 0 },
-          { label: 'Baris kosong (dilewati)', value: res.stats.skipped > 0 ? res.stats.skipped : null },
-          { label: 'SKU duplikat dlm file (diabaikan)', value: res.stats.duplicateInFile > 0 ? res.stats.duplicateInFile : null, warn: true }
+          { label: 'Ditambah', value: stats.added },
+          { label: 'SKU sudah ada (ditolak)', value: stats.alreadyExists > 0 ? stats.alreadyExists : null, warn: stats.alreadyExists > 0 },
+          { label: 'Barcode terisi ke item lama', value: stats.barcodeFilled > 0 ? stats.barcodeFilled : null },
+          { label: 'Barcode dilewati (sudah dipakai item lain)', value: stats.barcodeSkippedDup > 0 ? stats.barcodeSkippedDup : null, warn: stats.barcodeSkippedDup > 0 },
+          { label: 'Baris kosong (dilewati)', value: stats.skipped > 0 ? stats.skipped : null },
+          { label: 'SKU duplikat dlm file (diabaikan)', value: stats.duplicateInFile > 0 ? stats.duplicateInFile : null, warn: true }
         ],
         'success'
       );
       closeModal();
       loadItemMasterTable(true);
     } else {
-      showToast(res.message, 'error');
+      showToast(result.message, 'error');
     }
   });
 }
@@ -3604,22 +3712,42 @@ function openImportBarcodeModal() {
 
   document.getElementById('processImportBarcodeBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
-    const res = await callServer('importItemMaster', { rows: parsedRows, currentUser: CURRENT_USER, barcodeOnly: true }, { loadingText: 'Mengimport barcode...' });
-    if (res.success) {
+    const btn = this;
+    btn.disabled = true;
+
+    const result = await runChunkedImport(
+      'importItemMaster',
+      parsedRows,
+      function(chunk) { return { rows: chunk, currentUser: CURRENT_USER, barcodeOnly: true }; },
+      function(total, chunkStats) {
+        return {
+          barcodeFilled: (total.barcodeFilled || 0) + (chunkStats.barcodeFilled || 0),
+          barcodeSkippedDup: (total.barcodeSkippedDup || 0) + (chunkStats.barcodeSkippedDup || 0),
+          skipped: (total.skipped || 0) + (chunkStats.skipped || 0),
+          duplicateInFile: (total.duplicateInFile || 0) + (chunkStats.duplicateInFile || 0)
+        };
+      },
+      'Mengimport barcode...'
+    );
+
+    btn.disabled = false;
+
+    if (result.success) {
+      const stats = result.stats;
       showStatsToast(
         'Import barcode selesai',
         [
-          { label: 'Barcode terisi', value: res.stats.barcodeFilled > 0 ? res.stats.barcodeFilled : null },
-          { label: 'Barcode dilewati (sudah dipakai item lain)', value: res.stats.barcodeSkippedDup > 0 ? res.stats.barcodeSkippedDup : null, warn: res.stats.barcodeSkippedDup > 0 },
-          { label: 'SKU belum terdaftar (dilewati)', value: res.stats.skipped > 0 ? res.stats.skipped : null, warn: res.stats.skipped > 0 },
-          { label: 'SKU duplikat dlm file (diabaikan)', value: res.stats.duplicateInFile > 0 ? res.stats.duplicateInFile : null, warn: true }
+          { label: 'Barcode terisi', value: stats.barcodeFilled > 0 ? stats.barcodeFilled : null },
+          { label: 'Barcode dilewati (sudah dipakai item lain)', value: stats.barcodeSkippedDup > 0 ? stats.barcodeSkippedDup : null, warn: stats.barcodeSkippedDup > 0 },
+          { label: 'SKU belum terdaftar (dilewati)', value: stats.skipped > 0 ? stats.skipped : null, warn: stats.skipped > 0 },
+          { label: 'SKU duplikat dlm file (diabaikan)', value: stats.duplicateInFile > 0 ? stats.duplicateInFile : null, warn: true }
         ],
         'success'
       );
       closeModal();
       loadItemMasterTable(true);
     } else {
-      showToast(res.message, 'error');
+      showToast(result.message, 'error');
     }
   });
 }
@@ -4190,7 +4318,14 @@ function openCreateSoModal() {
         currentUser: CURRENT_USER,
         store: storeVal,
         tipe: document.getElementById('newSoTipe').value,
-        tanggal: document.getElementById('newSoTanggal').value
+        tanggal: document.getElementById('newSoTanggal').value,
+        // FIX (Buat SO 1x jadi beberapa SO): key unik dibuat SEKALI di sini
+        // per klik tombol, dan tetap SAMA persis dipakai lagi kalau
+        // callServer melakukan retry otomatis (timeout/gagal jaringan) untuk
+        // percobaan yang SAMA. Backend (createStockOpname di Code.gs)
+        // memakai key ini untuk mengenali "ini permintaan yang sama yang
+        // sempat diulang" dan tidak membuat baris SO kedua/ketiga/dst.
+        idempotencyKey: (Date.now() + '_' + Math.random().toString(36).slice(2))
       };
       if (!params.store || !params.tanggal) {
         showToast('Store dan Tanggal SO wajib diisi.', 'error');
@@ -5725,59 +5860,41 @@ function openImportStockModal() {
   document.getElementById('processImportStockBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
 
-    // FIX: komunikasi ke backend sekarang lewat JSONP (lihat catatan di
-    // index_github.html), yaitu request GET dengan payload dimasukkan ke
-    // URL — punya batas panjang URL yang jauh lebih kecil dibanding POST
-    // biasa. File Stock Sistem toko besar bisa berisi ratusan/ribuan SKU,
-    // yang kalau dikirim sekaligus sebagai satu payload JSON di URL akan
-    // melebihi batas itu dan gagal dengan pesan "URL app bermasalah".
-    // Solusinya: pecah (chunk) rows jadi beberapa batch kecil dan kirim
-    // berurutan, lalu gabungkan hasil statistiknya di client.
-    const CHUNK_SIZE = 150;
-    const chunks = [];
-    for (let i = 0; i < parsedRows.length; i += CHUNK_SIZE) {
-      chunks.push(parsedRows.slice(i, i + CHUNK_SIZE));
-    }
-
     const btn = this;
     btn.disabled = true;
 
-    let totalMatched = 0, totalNotFound = 0, totalSkippedZeroStock = 0;
-    let failed = false;
-
-    for (let i = 0; i < chunks.length; i++) {
-      showLoading(chunks.length > 1
-        ? 'Mengimport stock sistem... (batch ' + (i + 1) + '/' + chunks.length + ')'
-        : 'Mengimport stock sistem...');
-      let res;
-      try {
-        res = await callServer('importStockToSo', { soId: CURRENT_SO_DETAIL.soId, rows: chunks[i], currentUser: CURRENT_USER }, { silent: true });
-      } catch (err) {
-        failed = true;
-        break;
-      }
-      if (!res || !res.success) {
-        showToast((res && res.message) || 'Import gagal di batch ' + (i + 1) + '.', 'error');
-        failed = true;
-        break;
-      }
-      totalMatched += res.stats.matched || 0;
-      totalNotFound += res.stats.notFound || 0;
-      totalSkippedZeroStock += res.stats.skippedZeroStock || 0;
-    }
+    // Berapapun jumlah baris di file (900, 5000, dst) ditangani otomatis
+    // oleh runChunkedImport dengan progress bar 0-100% asli — lihat definisi
+    // runChunkedImport di atas untuk detail kenapa ini sekarang jauh lebih
+    // andal dibanding skema batch lama.
+    const result = await runChunkedImport(
+      'importStockToSo',
+      parsedRows,
+      function(chunk) { return { soId: CURRENT_SO_DETAIL.soId, rows: chunk, currentUser: CURRENT_USER }; },
+      function(total, chunkStats) {
+        return {
+          matched: (total.matched || 0) + (chunkStats.matched || 0),
+          notFound: (total.notFound || 0) + (chunkStats.notFound || 0),
+          skippedZeroStock: (total.skippedZeroStock || 0) + (chunkStats.skippedZeroStock || 0)
+        };
+      },
+      'Mengimport stock sistem...'
+    );
 
     btn.disabled = false;
-    hideLoading();
 
-    if (failed) return;
+    if (!result.success) {
+      showToast(result.message, 'error');
+      return;
+    }
 
-    const hasNotFound = totalNotFound > 0;
+    const hasNotFound = (result.stats.notFound || 0) > 0;
     showStatsToast(
       'Import stock sistem selesai',
       [
-        { label: 'Cocok', value: totalMatched },
-        { label: 'Tidak terdaftar', value: totalNotFound, warn: hasNotFound },
-        { label: 'Dilewati (stock 0)', value: totalSkippedZeroStock || null }
+        { label: 'Cocok', value: result.stats.matched || 0 },
+        { label: 'Tidak terdaftar', value: result.stats.notFound || 0, warn: hasNotFound },
+        { label: 'Dilewati (stock 0)', value: result.stats.skippedZeroStock || null }
       ],
       hasNotFound ? 'error' : 'success'
     );
