@@ -1501,6 +1501,7 @@ function applyTheme(dark) {
   const btn = document.getElementById('notifBtn');
   const list = document.getElementById('notifPopoverList');
   const markAllBtn = document.getElementById('notifMarkAll');
+  const viewAllBtn = document.getElementById('notifViewAllBtn');
   if (!widget || !btn) return;
 
   function closeNotif() { widget.classList.remove('open'); }
@@ -1538,6 +1539,17 @@ function applyTheme(dark) {
     markAllBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       goToNotifTarget();
+    });
+  }
+  if (viewAllBtn) {
+    // "Lihat semua di Riwayat SO" — dibuat supaya daftar notifikasi (yang
+    // sengaja dibatasi 20 item terbaru dari backend) tidak terasa
+    // "menggantung"/tidak jelas ke mana lagi kalau user ingin lihat lebih
+    // banyak. Cukup buka Riwayat SO tanpa filter pencarian tertentu.
+    viewAllBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      navigateTo(canApproveSo() ? 'riwayat' : 'stockOpname');
+      closeNotif();
     });
   }
   document.addEventListener('click', function(e) {
