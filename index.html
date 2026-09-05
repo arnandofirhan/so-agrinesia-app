@@ -46,9 +46,10 @@
   </script>
 
   <!-- ===== PERCEPAT LOADING: preconnect ke domain GAS lebih awal ===== -->
-  <!-- Sekarang komunikasi ke backend lewat JSONP (tag <script src>), jadi
-       preconnect ini masih relevan untuk memangkas waktu DNS+TLS handshake
-       sebelum request JSONP pertama ditembakkan (mis. saat login). -->
+  <!-- Komunikasi ke backend sekarang lewat POST form ke iframe tersembunyi
+       (lihat api-bridge.js) — bukan lagi JSONP/GET. preconnect ini masih
+       relevan untuk memangkas waktu DNS+TLS handshake sebelum request
+       pertama ditembakkan (mis. saat login). -->
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
