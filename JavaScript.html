@@ -902,13 +902,31 @@ function hideImportProgress() {
 // TIDAK dikirim) supaya tidak makin banyak yang diproses dalam keadaan
 // tidak jelas, dan pesan error chunk tsb yang ditampilkan ke user.
 async function runChunkedImport(fnName, allRows, buildParams, mergeStats, loadingLabel) {
-  const CHUNK_SIZE = 200;
+  // FIX PERFORMA: sebelumnya CHUNK_SIZE=200 dipilih dengan asumsi lama
+  // (skema JSONP/GET yang terbatas panjang URL). Sekarang komunikasi sudah
+  // lewat fetch() POST biasa (lihat api-bridge.js) yang TIDAK py batas
+  // ukuran payload praktis — chunk sekecil itu cuma bikin ribuan baris
+  // terpecah jadi banyak sekali request berurutan (mis. 3200 baris jadi
+  // 16 request), dan tiap request punya overhead round-trip jaringan +
+  // cold-start GAS sendiri (bisa 1-5 detik), sehingga TOTALNYA jadi jauh
+  // lebih lambat dibanding kirim sekaligus (yang dulu dipakai saat masih
+  // full di GAS). CHUNK_SIZE dinaikkan jauh (2000) supaya file berukuran
+  // wajar (ratusan-ribuan baris) selesai dalam SATU request saja —
+  // chunking tetap dipertahankan sebagai jaring pengaman kalau suatu saat
+  // ada file sangat besar (puluhan ribu baris) yang bisa bikin satu
+  // request kelamaan/timeout di sisi GAS.
+  const CHUNK_SIZE = 2000;
   const chunks = [];
   for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
     chunks.push(allRows.slice(i, i + CHUNK_SIZE));
   }
 
   showImportProgress(loadingLabel);
+  // Progress dimulai dari sedikit di atas 0% (bukan diam di 0%) supaya
+  // user langsung melihat pergerakan begitu proses dimulai, bukan
+  // menunggu chunk pertama selesai baru bar bergerak sama sekali —
+  // terasa lebih responsif terutama saat cuma ada 1 chunk (paling umum).
+  updateImportProgress(5);
 
   let totalStats = {};
   let processedRows = 0;
@@ -917,7 +935,7 @@ async function runChunkedImport(fnName, allRows, buildParams, mergeStats, loadin
     const chunk = chunks[i];
     let res;
     try {
-      res = await callServer(fnName, buildParams(chunk), { silent: true, maxRetries: 2 });
+      res = await callServer(fnName, buildParams(chunk), { silent: true, maxRetries: 2, timeoutMs: 120000 });
     } catch (err) {
       hideImportProgress();
       return { success: false, message: 'Import gagal: ' + (err && err.message ? err.message : 'kesalahan jaringan.') };
