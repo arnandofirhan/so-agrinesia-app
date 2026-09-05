@@ -11,35 +11,47 @@
  * SEBELUM file ini dimuat.
  *
  * ======================================================================
- * PERUBAHAN BESAR (fix error saat import data banyak / SO dobel / console
- * penuh error _soCb_...):
+ * RIWAYAT PERBAIKAN (baca ini kalau nanti ketemu masalah serupa lagi):
  * ======================================================================
- * Versi SEBELUMNYA memakai JSONP murni: <script src="...exec?fn=..&args=
- * [...]&callback=...">, dengan payload (args) dimasukkan ke QUERY STRING
- * URL. Ini py 2 masalah besar:
+ * v1 (JSONP murni via GET, ?fn=..&args=...&callback=...):
+ *   - GAGAL untuk payload besar (import ratusan/ribuan baris) karena
+ *     panjang URL/query string terbatas (~8000 karakter).
+ *   - Retry otomatis di callServer() bisa memicu fungsi backend yang
+ *     tidak idempotent berjalan dobel (mis. createStockOpname), karena
+ *     request GET tetap diproses server walau responsnya telat di
+ *     browser.
+ *   - Callback global "_soCb_..." yang tidak sempat terpanggil (mis. user
+ *     pindah halaman sebelum request selesai) menumpuk jadi error
+ *     "ReferenceError: _soCb_... is not defined" di console.
  *
- *   1. URL punya batas panjang (umumnya sekitar 8.000 karakter tergantung
- *      browser/server). Saat import ratusan/ribuan baris data, JSON.stringify
- *      dari rows tsb dengan mudah melebihi batas itu -> request gagal total
- *      atau terpotong, walau sudah di-chunk kecil, terutama kalau nama
- *      item/SKU panjang.
- *   2. Setiap request JSONP TETAP diproses server (GAS tetap menjalankan
- *      fungsinya) walau browser sudah "menyerah" duluan karena timeout —
- *      sehingga retry otomatis di callServer() bisa memicu fungsi yang
- *      TIDAK idempotent (mis. createStockOpname) berjalan lebih dari
- *      sekali, menghasilkan data dobel/SO ganda.
+ * v2 (POST lewat <form> + <iframe> tersembunyi + postMessage):
+ *   - TERNYATA TIDAK BISA DIPAKAI SAMA SEKALI untuk Web App GAS. Google
+ *     SELALU me-redirect (HTTP 302) setiap request ke URL .../exec ke URL
+ *     internal lain sebelum benar-benar dieksekusi. Untuk request NON-GET
+ *     (termasuk POST dari <form>), redirect 302 itu diubah browser
+ *     menjadi request GET tanpa body sama sekali (perilaku standar
+ *     redirect 302 lintas method) begitu terjadi di dalam <iframe> —
+ *     sehingga doPost() di server TIDAK PERNAH benar-benar menerima data
+ *     apapun, dan halaman di dalam iframe tidak pernah selesai memuat ->
+ *     login macet selamanya di "Memproses..." / berakhir TIMEOUT.
  *
- * SEKARANG: request dikirim sebagai POST FORM lewat <iframe> tersembunyi
- * (bukan fetch/XHR) — teknik "hidden iframe form post" ini classic dan
- * TIDAK tunduk pada CORS sama sekali (form POST cross-origin ke iframe
- * selalu diizinkan browser, beda dengan fetch/XHR), dan yang jauh lebih
- * penting: TIDAK ADA batas panjang payload seperti URL/query string,
- * karena data dikirim di form body, bukan di URL. Response dari server
- * (JSON) dikirim balik lewat postMessage() dari halaman yang di-render di
- * dalam iframe tsb (lihat doPost() & buildBridgeResponseHtml_() di
- * Code.gs). Cara ini juga otomatis menghapus SEMUA masalah callback
- * "_soCb_..." nyangkut di window/console — tidak ada lagi global callback
- * yang didaftarkan ke window sama sekali.
+ * v3 (SEKARANG — fetch() biasa, Content-Type: text/plain):
+ *   - fetch() (BUKAN iframe/form) mengikuti redirect 302 tsb secara
+ *     otomatis SAMBIL TETAP mempertahankan method POST & body-nya (beda
+ *     dari perilaku form/iframe) — ini perilaku standar fetch() untuk
+ *     redirect 307/308, dan Google Apps Script diketahui mengirim varian
+ *     redirect yang kompatibel dengan ini untuk Web App-nya.
+ *   - Content-Type SENGAJA "text/plain" (BUKAN "application/json"), supaya
+ *     browser menganggap ini "simple request" (tidak memicu preflight
+ *     OPTIONS) — GAS tidak pernah merespons OPTIONS, jadi kalau sampai
+ *     ada preflight, request itu otomatis gagal total.
+ *   - Response akhir dari GAS (setelah redirect) membawa header
+ *     "Access-Control-Allow-Origin: *", sehingga BISA dibaca fetch() dari
+ *     origin manapun (termasuk GitHub Pages) tanpa perlu trik JSONP/iframe
+ *     apapun lagi.
+ *   - Payload TIDAK LAGI dibatasi panjang URL sama sekali (data ada di
+ *     body request, bukan query string) — inilah yang benar-benar
+ *     menyelesaikan masalah "import 900 baris gagal".
  * ======================================================================
  */
 (function () {
@@ -48,106 +60,49 @@
     return;
   }
 
-  var _reqCounter = 0;
-  var _pending = {}; // reqId -> { resolve, reject, timer, iframe, onProgress }
-
-  // Timeout jaringan untuk 1 percobaan request. callServer() di
-  // JavaScript.html sudah punya retry/timeout sendiri di atas ini, jadi
-  // nilai di sini sengaja dibuat agak longgar (di atas timeout callServer
-  // untuk operasi besar seperti import) supaya callServer yang pegang
-  // kendali retry, bukan dua lapis timeout saling tumpang tindih.
   var REQUEST_TIMEOUT_MS = 60000;
 
-  // Menerima pesan balasan dari iframe (dikirim oleh halaman kecil yang
-  // di-render oleh doPost() di Code.gs lewat window.parent.postMessage()).
-  window.addEventListener('message', function (event) {
-    var msg = event.data;
-    if (!msg || typeof msg !== 'object' || msg.__soBridge !== true) return;
-    var entry = _pending[msg.reqId];
-    if (!entry) return; // request sudah dibersihkan/timeout/halaman lain sudah pindah -> abaikan diam-diam, TIDAK console.error
+  function requestServer(fnName, args) {
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
 
-    if (msg.type === 'progress') {
-      if (entry.onProgress) {
-        try { entry.onProgress(msg.progress); } catch (e) { /* jangan biarkan error di UI progress menggagalkan request */ }
-      }
-      return;
-    }
+    var fetchOpts = {
+      method: 'POST',
+      // "text/plain" dipertahankan APA ADANYA (bukan application/json) —
+      // lihat catatan panjang di atas file ini tentang kenapa ini WAJIB
+      // supaya tidak memicu CORS preflight yang tidak didukung GAS.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ fn: fnName, args: args || [] }),
+      redirect: 'follow'
+    };
+    if (controller) fetchOpts.signal = controller.signal;
 
-    if (msg.type === 'result') {
-      cleanupRequest_(msg.reqId);
-      if (msg.ok) {
-        entry.resolve(msg.result);
-      } else {
-        entry.reject(new Error(msg.error || 'Terjadi kesalahan di server.'));
-      }
-    }
-  });
-
-  function cleanupRequest_(reqId) {
-    var entry = _pending[reqId];
-    if (!entry) return;
-    if (entry.timer) clearTimeout(entry.timer);
-    if (entry.iframe && entry.iframe.parentNode) {
-      // Iframe dilepas SETELAH beri jeda singkat (bukan langsung), supaya
-      // kalau ada pesan susulan yang masih dalam perjalanan (race), tidak
-      // hilang begitu saja. Jeda ini kecil dan tidak terasa oleh user.
-      setTimeout(function () {
-        if (entry.iframe && entry.iframe.parentNode) {
-          entry.iframe.parentNode.removeChild(entry.iframe);
+    return fetch(SO_APP_URL, fetchOpts)
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        if (!res.ok) {
+          throw new Error('Server merespons dengan status ' + res.status);
         }
-      }, 500);
-    }
-    delete _pending[reqId];
-  }
-
-  // requestServer: mengirim satu panggilan fungsi backend via POST form
-  // tersembunyi. onProgress (opsional) dipanggil kalau backend mengirim
-  // update progres (dipakai fungsi import besar, lihat Code.gs ->
-  // reportProgress_()).
-  function requestServer(fnName, args, onProgress) {
-    return new Promise(function (resolve, reject) {
-      var reqId = 'r' + Date.now() + '_' + (_reqCounter++);
-
-      var iframeName = 'so_bridge_' + reqId;
-      var iframe = document.createElement('iframe');
-      iframe.name = iframeName;
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-
-      var form = document.createElement('form');
-      form.method = 'POST';
-      form.action = SO_APP_URL;
-      form.target = iframeName;
-      form.style.display = 'none';
-      form.enctype = 'application/x-www-form-urlencoded';
-
-      function addField(name, value) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
-      }
-      addField('fn', fnName);
-      addField('args', JSON.stringify(args || []));
-      addField('reqId', reqId);
-      // Origin dikirim eksplisit supaya doPost() tahu ke mana harus
-      // postMessage() balik (window.parent.postMessage butuh target origin).
-      addField('origin', window.location.origin);
-
-      var timer = setTimeout(function () {
-        cleanupRequest_(reqId);
-        reject(new Error('TIMEOUT'));
-      }, REQUEST_TIMEOUT_MS);
-
-      _pending[reqId] = { resolve: resolve, reject: reject, timer: timer, iframe: iframe, onProgress: onProgress };
-
-      document.body.appendChild(form);
-      form.submit();
-      // Form hanya alat kirim satu kali, boleh langsung dilepas (beda dgn
-      // iframe yg masih dipakai utk terima response).
-      form.parentNode.removeChild(form);
-    });
+        return res.text();
+      })
+      .then(function (text) {
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          throw new Error('Respons server tidak valid (bukan JSON).');
+        }
+      })
+      .catch(function (err) {
+        if (timer) clearTimeout(timer);
+        if (err && err.name === 'AbortError') {
+          throw new Error('TIMEOUT');
+        }
+        // Pesan generik untuk kegagalan jaringan murni (offline, DNS,
+        // server tidak bisa dihubungi sama sekali) — dipertahankan sama
+        // seperti pesan versi-versi sebelumnya supaya UI (callServer,
+        // showToast) tidak perlu diubah.
+        throw new Error(err && err.message ? err.message : 'Gagal menghubungi server (jaringan/URL app bermasalah).');
+      });
   }
 
   // ---- Shim google.script.run ----
@@ -183,10 +138,4 @@
   window.google = window.google || {};
   window.google.script = window.google.script || {};
   window.google.script.run = makeRunner(null, null);
-
-  // Dipakai LANGSUNG (bukan lewat google.script.run) oleh callServer() di
-  // JavaScript.html untuk operasi yang butuh progress bar asli (import
-  // Item Master / Stock Sistem) — lihat perubahan callServer() &
-  // openImportItemModal()/openImportStockModal() di JavaScript.html.
-  window.soApiCallWithProgress = requestServer;
 })();
