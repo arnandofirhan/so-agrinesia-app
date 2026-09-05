@@ -11,7 +11,7 @@
        tinggal ganti nilainya kalau kamu deploy ulang Code.gs dan URL /exec
        berubah. HARUS didefinisikan SEBELUM api-bridge.js dimuat. -->
   <script>
-    var SO_APP_URL = "https://script.google.com/macros/s/AKfycbyHxJXf9BME1mIEyo9ZxjH0y-MxvK2EMkM1CQRabMhGbn02eOCwOyyy2GglnhV4spJSeQ/exec";
+    var SO_APP_URL = "https://script.google.com/a/macros/agrinesia.co.id/s/AKfycbyHxJXf9BME1mIEyo9ZxjH0y-MxvK2EMkM1CQRabMhGbn02eOCwOyyy2GglnhV4spJSeQ/exec";
     // Dipakai oleh JavaScript.html (variabel lama, dipertahankan biar tidak
     // perlu ubah kode lama yang mungkin masih mereferensikannya).
     var SO_WEBAPP_URL = SO_APP_URL;
@@ -153,6 +153,22 @@
     </div>
     <div class="loading-app-name">Stock Opname — Agrinesia</div>
     <div class="loading-text" id="loadingText">Memuat aplikasi...</div>
+    <!-- Progress bar 0-100% khusus untuk proses import data (Item Master,
+         Barcode, Stock Sistem) — disembunyikan (hidden) dan tidak dipakai
+         sama sekali oleh loading spinner biasa. Diisi/ditampilkan oleh
+         showImportProgress()/updateImportProgress()/hideImportProgress()
+         di JavaScript.html.
+         PENTING: elemen ini HARUS ada di file index.html yang benar-benar
+         di-serve GitHub Pages (file ini) — sebelumnya sempat salah
+         ditambahkan cuma di Index.html sisi GAS yang sudah tidak dipakai
+         lagi, makanya progress bar tidak pernah muncul walau kodenya
+         sudah ada di JavaScript.html. -->
+    <div id="importProgressWrap" class="import-progress-wrap hidden">
+      <div class="import-progress-track">
+        <div class="import-progress-fill" id="importProgressFill" style="width:0%"></div>
+      </div>
+      <div class="import-progress-pct" id="importProgressPct">0%</div>
+    </div>
   </div>
 
   <!-- ===================== LOGIN PAGE ===================== -->
