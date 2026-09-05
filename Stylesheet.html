@@ -1889,9 +1889,16 @@
          habisnya". Batasi tinggi jelas + list di dalamnya yang scroll
          (lihat .notif-popover-list di bawah), bukan seluruh popovernya. */
       max-height: calc(100vh - 100px);
-      display: flex;
-      flex-direction: column;
     }
+    /* BUG SEBELUMNYA (fatal): rule di atas sempat py "display: flex" TANPA
+       syarat class ".open" — akibatnya popover ini SELALU tampil di HP
+       begitu halaman dimuat, walau widget belum diklik sama sekali, dan
+       tidak bisa ditutup (klik di luar cuma menghapus class "open" yang
+       toh sudah tidak menentukan display sama sekali di breakpoint ini).
+       flex-direction dipindah ke rule berikut yang TETAP mensyaratkan
+       ".notif-widget.open", supaya perilaku show/hide di HP konsisten
+       dengan desktop. */
+    .notif-widget.open .notif-popover { flex-direction: column; }
   }
   .notif-popover-header {
     display: flex;
