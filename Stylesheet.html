@@ -1883,22 +1883,24 @@
       right: 10px;
       width: auto;
       max-width: none;
-      /* FIX: sebelumnya tidak ada batas tinggi eksplisit di mobile —
-         popover jadi memanjang sampai nyaris penuh layar dan scrollbar
-         nyaris tak terlihat di HP, kesannya "notifikasi tidak ada
-         habisnya". Batasi tinggi jelas + list di dalamnya yang scroll
-         (lihat .notif-popover-list di bawah), bukan seluruh popovernya. */
-      max-height: calc(100vh - 100px);
+      /* Setengah layar saja (bukan hampir penuh) — cukup untuk lihat
+         beberapa notifikasi teratas, sisanya di-scroll di dalam sini
+         sendiri atau lewat tombol "Lihat semua di Riwayat SO". */
+      max-height: 50vh;
+      max-height: 50dvh;
     }
-    /* BUG SEBELUMNYA (fatal): rule di atas sempat py "display: flex" TANPA
-       syarat class ".open" — akibatnya popover ini SELALU tampil di HP
-       begitu halaman dimuat, walau widget belum diklik sama sekali, dan
-       tidak bisa ditutup (klik di luar cuma menghapus class "open" yang
-       toh sudah tidak menentukan display sama sekali di breakpoint ini).
-       flex-direction dipindah ke rule berikut yang TETAP mensyaratkan
-       ".notif-widget.open", supaya perilaku show/hide di HP konsisten
-       dengan desktop. */
     .notif-widget.open .notif-popover { flex-direction: column; }
+  }
+  .notif-popover,
+  .notif-popover-list {
+    /* FIX (scroll di dalam popover "tembus" ke halaman di belakangnya):
+       perilaku default browser adalah scroll chaining — begitu konten
+       yang di-scroll (list notifikasi) mentok di ujung atas/bawahnya,
+       browser otomatis melanjutkan scroll itu ke elemen leluhur
+       berikutnya (di sini: body/halaman di belakang popover). overscroll-
+       behavior:contain menghentikan efek "tembus" itu tepat di batas
+       elemen ini. */
+    overscroll-behavior: contain;
   }
   .notif-popover-header {
     display: flex;
@@ -1940,7 +1942,7 @@
     background-attachment: local, local, scroll, scroll;
   }
   @media (max-width: 480px) {
-    .notif-popover-list { max-height: none; flex: 1; min-height: 0; }
+    .notif-popover-list { flex: 1; min-height: 0; }
   }
   .notif-popover-footer {
     flex-shrink: 0;
