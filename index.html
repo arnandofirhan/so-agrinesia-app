@@ -361,6 +361,14 @@
                   <span>Tidak ada notifikasi</span>
                 </div>
               </div>
+              <!-- Footer kecil: dulu daftar notifikasi terasa "tidak berujung"
+                   di HP karena scrollbar-nya nyaris tidak terlihat di layar
+                   sentuh — footer ini memberi sinyal jelas bahwa daftar
+                   dibatasi (backend membatasi maks 20 notifikasi terbaru),
+                   dan mengarahkan ke Riwayat SO untuk melihat selebihnya. -->
+              <div class="notif-popover-footer" id="notifPopoverFooter">
+                <button type="button" class="notif-view-all" id="notifViewAllBtn">Lihat semua di Riwayat SO</button>
+              </div>
             </div>
           </div>
           <button type="button" class="theme-toggle-btn" id="themeToggleBtn" title="Ganti tampilan gelap/terang">
