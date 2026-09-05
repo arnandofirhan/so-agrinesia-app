@@ -7,7 +7,7 @@
  *      JavaScript.html/Stylesheet.html tidak perlu diunduh ulang tiap buka).
  *   2. Perpindahan menu tetap instan karena ini SPA (tidak reload halaman).
  *   3. Aplikasi tetap bisa dibuka (shell-nya) walau sinyal jelek — data dari
- *      Google Sheets sendiri TETAP SELALU live lewat JSONP ke GAS, TIDAK
+ *      Google Sheets sendiri TETAP SELALU live lewat request ke GAS, TIDAK
  *      di-cache di sini (supaya stok/SO yang ditampilkan tidak basi).
  *
  * CACHE_VERSION: WAJIB naikkan angka ini (v1 -> v2 -> v3 -> ...) SETIAP
@@ -19,9 +19,16 @@
  * untuk urusan kecepatan. Ini persis penyebab "Logo.html sudah dipush tapi
  * splash tetap kosong" — versi cache tidak berubah jadi service worker
  * merasa tidak perlu ambil ulang dari jaringan.
+ *
+ * NAIK KE v12 sebagai bagian dari perbaikan besar: pindah dari JSONP/GET
+ * (batas panjang URL, penyebab error import & SO dobel) ke POST lewat
+ * iframe tersembunyi. WAJIB dinaikkan supaya SEMUA device (termasuk HP
+ * role Store yang sebelumnya masih menampilkan SO yang sudah dihapus
+ * Admin) langsung ambil ulang api-bridge.js & JavaScript.html versi baru,
+ * bukan terus memakai versi lama dari cache.
  * ======================================================================
  */
-var CACHE_VERSION = 'so-shell-v11';
+var CACHE_VERSION = 'so-shell-v12';
 var SHELL_ASSETS = [
   './index.html',
   './Stylesheet.html',
@@ -34,7 +41,6 @@ var SHELL_ASSETS = [
   './icon-maskable-192.png',
   './icon-maskable-512.png'
 ];
-
 self.addEventListener('install', function (event) {
   self.skipWaiting();
   event.waitUntil(
@@ -43,7 +49,6 @@ self.addEventListener('install', function (event) {
     })
   );
 });
-
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
@@ -54,19 +59,27 @@ self.addEventListener('activate', function (event) {
     }).then(function () { return self.clients.claim(); })
   );
 });
-
 self.addEventListener('fetch', function (event) {
   var url = event.request.url;
-
   // JANGAN PERNAH cache request ke backend GAS (script.google.com /
   // googleusercontent.com) — itu data live (stok, SO, dashboard, dst).
   // Selalu ambil dari jaringan, tanpa fallback cache, supaya data yang
-  // tampil ke user SELALU yang terbaru.
+  // tampil ke user SELALU yang terbaru. Ini juga otomatis mencakup semua
+  // request POST (form submit) ke /exec yang dipakai api-bridge.js
+  // sekarang — permintaan non-GET tidak pernah cocok dgn cache manapun,
+  // jadi selalu diteruskan langsung ke jaringan seperti request GET lain
+  // ke domain ini.
   if (url.indexOf('script.google.com') !== -1 || url.indexOf('googleusercontent.com') !== -1) {
     event.respondWith(fetch(event.request));
     return;
   }
-
+  // Request non-GET (POST dari form iframe, dsb) tidak bisa/tidak boleh
+  // dicocokkan ke Cache API (Cache.match hanya untuk GET) — teruskan apa
+  // adanya ke jaringan.
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   // Shell statis: cache-first (langsung dari cache kalau ada, supaya
   // instan), tapi diam-diam diperbarui di background (stale-while-revalidate)
   // supaya versi berikutnya sudah ter-update tanpa user merasa nunggu.
