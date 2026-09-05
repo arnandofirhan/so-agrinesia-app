@@ -796,7 +796,23 @@
   .btn-approve-confirm:hover { background: var(--accent-vivid-dark); box-shadow: 0 4px 10px rgba(22,163,74,0.24); transform: translateY(-1px); }
   .btn-approve-confirm:active { transform: translateY(0); }
 
-  .app-shell { display: flex; min-height: 100vh; }
+  .app-shell {
+    display: flex;
+    /* FIX (celah tipis di atas/bawah menu setelah login): 100vh dipakai
+       sebagai fallback urutan pertama untuk browser lama yang belum
+       kenal dvh, TAPI 100dvh (dynamic viewport height) yang benar-benar
+       dipakai di browser modern — inilah unit yang mengikuti tinggi
+       viewport NYATA saat ini (memperhitungkan address bar/gesture nav
+       yang muncul-hilang), beda dengan 100vh yang di banyak browser
+       mobile mengacu ke tinggi viewport TERBESAR yang mungkin (seolah
+       address bar selalu tersembunyi), sehingga menyisakan celah kosong
+       saat address bar sedang tampil.
+       min-height (bukan height) tetap dipertahankan supaya app-shell
+       boleh lebih tinggi dari viewport kalau kontennya memang panjang
+       (halaman yang perlu discroll) — TIDAK dipotong/clip. */
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
 
   .sidebar {
     width: 250px;
@@ -1867,6 +1883,14 @@
       right: 10px;
       width: auto;
       max-width: none;
+      /* FIX: sebelumnya tidak ada batas tinggi eksplisit di mobile —
+         popover jadi memanjang sampai nyaris penuh layar dan scrollbar
+         nyaris tak terlihat di HP, kesannya "notifikasi tidak ada
+         habisnya". Batasi tinggi jelas + list di dalamnya yang scroll
+         (lihat .notif-popover-list di bawah), bukan seluruh popovernya. */
+      max-height: calc(100vh - 100px);
+      display: flex;
+      flex-direction: column;
     }
   }
   .notif-popover-header {
@@ -1895,7 +1919,41 @@
     max-height: 380px;
     overflow-y: auto;
     padding: 6px;
+    /* Bayangan halus di atas/bawah list kalau masih bisa di-scroll, supaya
+       user langsung sadar ada lebih banyak notifikasi di bawah tanpa
+       harus mengandalkan scrollbar tipis (yang nyaris tak terlihat di
+       HP). */
+    background:
+      linear-gradient(var(--white) 30%, rgba(255,255,255,0)),
+      linear-gradient(rgba(255,255,255,0), var(--white) 70%) 0 100%,
+      linear-gradient(rgba(0,0,0,.06), rgba(0,0,0,0)),
+      linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.06)) 0 100%;
+    background-repeat: no-repeat;
+    background-size: 100% 24px, 100% 24px, 100% 8px, 100% 8px;
+    background-attachment: local, local, scroll, scroll;
   }
+  @media (max-width: 480px) {
+    .notif-popover-list { max-height: none; flex: 1; min-height: 0; }
+  }
+  .notif-popover-footer {
+    flex-shrink: 0;
+    border-top: 1px solid var(--gray-200);
+    padding: 8px;
+  }
+  .notif-view-all {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--primary-text);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s var(--ease);
+  }
+  .notif-view-all:hover { background: var(--primary-lighter); }
+  html[data-theme="dark"] .notif-popover-footer { border-color: rgba(255,255,255,0.09); }
   .notif-item {
     display: flex;
     align-items: flex-start;
@@ -3860,14 +3918,26 @@
   }
   @keyframes loadingPillIn { from { transform: translateY(-10px) scale(.94); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
   .loading-overlay .loading-app-name { display: none; }
-  .spinner {
-    width: 44px; height: 44px;
-    border: 4px solid var(--primary-light);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
+  /* FIX (progress bar "gepeng" di HP): saat progress bar import aktif,
+     pill loading ini HARUS berubah dari pill sempit (row, tinggi tetap
+     kecil) jadi kartu vertikal yang proporsional — sebelumnya bar+persen
+     dipaksa masuk ke pill row yang sudah py tinggi tetap kecil, sehingga
+     bar terlihat gepeng/kepotong terutama di layar HP yang sempit.
+     :has() dipakai supaya TIDAK perlu ubah struktur HTML sama sekali —
+     begitu #importProgressWrap kehilangan class "hidden", pill ini
+     otomatis berubah tata letak. */
+  .loading-overlay:has(#importProgressWrap:not(.hidden)) {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 18px;
+    border-radius: 18px;
+    gap: 4px;
+    width: 260px;
+    max-width: calc(100vw - 48px);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-overlay:has(#importProgressWrap:not(.hidden)) .brand-spinner {
+    margin-right: 10px;
+  }
   .loading-text { font-size: 13px; font-weight: 700; color: var(--gray-700); letter-spacing: .2px; white-space: nowrap; }
 
   /* Progress bar 0-100% modern untuk proses import data besar (Item
@@ -3877,10 +3947,10 @@
   .import-progress-wrap {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 8px;
-    width: 220px;
-    margin-top: 14px;
+    width: 100%;
+    margin-top: 10px;
   }
   .import-progress-wrap.hidden { display: none; }
   .import-progress-track {
