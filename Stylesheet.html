@@ -3492,6 +3492,10 @@
     pointer-events: none;
   }
   .icon-modal-box.icon-modal-wide { max-width: 500px; }
+  @keyframes sheetSlideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
   .icon-modal-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 4px; position: relative; }
   .icon-modal-badge {
     width: 44px; height: 44px;
@@ -3926,6 +3930,23 @@
     animation: loadingPillIn .22s var(--ease);
   }
   @keyframes loadingPillIn { from { transform: translateY(-10px) scale(.94); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  /* FIX (permintaan): posisi toast loading cepat (create/delete SO, dll)
+     dipindah dari pojok kanan-atas (rawan teks kepotong di layar sempit)
+     ke TOP-CENTER khusus mobile — lebar menyesuaikan konten & dipusatkan,
+     jadi teks apapun panjangnya tidak akan pernah terpotong. Desktop tetap
+     di kanan atas (ruang cukup lega di sana). */
+  @media (max-width: 640px) {
+    .loading-overlay:not(.loading-overlay-progress) {
+      inset: 16px auto auto 50%;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 32px);
+      width: max-content;
+    }
+    @keyframes loadingPillIn {
+      from { transform: translateX(-50%) translateY(-10px) scale(.94); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+    }
+  }
   .loading-overlay .loading-app-name { display: none; }
   /* FIX (progress bar "gepeng" di HP, DAN bug baru: ring loading berhenti
      berputar saat progress bar aktif): versi SEBELUMNYA pakai selector
@@ -3950,6 +3971,31 @@
     gap: 4px;
     width: 260px;
     max-width: calc(100vw - 48px);
+  }
+  /* FIX (permintaan): loading yang BERDURASI LAMA (import, punya progress
+     bar) dipindah jadi BOTTOM SHEET khusus mobile — konsisten dengan gaya
+     modal konfirmasi baru, dan memberi ruang lebih lega untuk progress
+     bar + persen + teks tanpa risiko kepotong. */
+  @media (max-width: 640px) {
+    .loading-overlay.loading-overlay-progress {
+      inset: auto 0 0 0;
+      transform: none;
+      width: 100%;
+      max-width: none;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 22px calc(20px + env(safe-area-inset-bottom, 0px));
+      animation: sheetSlideUp .28s cubic-bezier(.25,.9,.35,1.18);
+      position: relative;
+    }
+    .loading-overlay.loading-overlay-progress::before {
+      content: '';
+      position: absolute;
+      top: 8px; left: 50%;
+      transform: translateX(-50%);
+      width: 36px; height: 4px;
+      background: var(--gray-300);
+      border-radius: 99px;
+    }
   }
   .loading-overlay.loading-overlay-progress .brand-spinner {
     margin-right: 10px;
