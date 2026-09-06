@@ -4014,6 +4014,16 @@
     border-right-color: var(--primary);
     animation: spin .9s linear infinite;
   }
+  /* FIX (ring loading diam, tidak berputar): @keyframes "spin" dipakai di
+     3 tempat (.brand-spinner-ring di sini, .export-trigger-btn.loading,
+     dan salah satu spinner lain) TAPI TIDAK PERNAH DIDEFINISIKAN di
+     file ini sama sekali — bug lama yang sudah ada sejak awal, cuma baru
+     kelihatan sekarang karena sebelumnya loading selalu selesai dalam
+     waktu sangat singkat (kurang dari sepersekian detik pertama sebelum
+     mata sempat menyadari ring-nya diam atau tidak). Begitu proses jadi
+     lebih lama (mis. menunggu import besar / GAS lambat merespons),
+     "diam"-nya baru terlihat jelas. */
+  @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes brandPulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.06); }
