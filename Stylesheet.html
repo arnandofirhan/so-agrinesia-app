@@ -3978,6 +3978,7 @@
      bar + persen + teks tanpa risiko kepotong. */
   @media (max-width: 640px) {
     .loading-overlay.loading-overlay-progress {
+      position: fixed;
       inset: auto 0 0 0;
       transform: none;
       width: 100%;
@@ -3985,7 +3986,6 @@
       border-radius: 20px 20px 0 0;
       padding: 20px 22px calc(20px + env(safe-area-inset-bottom, 0px));
       animation: sheetSlideUp .28s cubic-bezier(.25,.9,.35,1.18);
-      position: relative;
     }
     .loading-overlay.loading-overlay-progress::before {
       content: '';
