@@ -3927,15 +3927,22 @@
   }
   @keyframes loadingPillIn { from { transform: translateY(-10px) scale(.94); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
   .loading-overlay .loading-app-name { display: none; }
-  /* FIX (progress bar "gepeng" di HP): saat progress bar import aktif,
-     pill loading ini HARUS berubah dari pill sempit (row, tinggi tetap
-     kecil) jadi kartu vertikal yang proporsional — sebelumnya bar+persen
-     dipaksa masuk ke pill row yang sudah py tinggi tetap kecil, sehingga
-     bar terlihat gepeng/kepotong terutama di layar HP yang sempit.
-     :has() dipakai supaya TIDAK perlu ubah struktur HTML sama sekali —
-     begitu #importProgressWrap kehilangan class "hidden", pill ini
-     otomatis berubah tata letak. */
-  .loading-overlay:has(#importProgressWrap:not(.hidden)) {
+  /* FIX (progress bar "gepeng" di HP, DAN bug baru: ring loading berhenti
+     berputar saat progress bar aktif): versi SEBELUMNYA pakai selector
+     :has(#importProgressWrap:not(.hidden)) yang dievaluasi ULANG oleh
+     browser SETIAP KALI ada perubahan di dalam elemen ini — termasuk
+     setiap kali updateImportProgress() mengubah style.width pada
+     .import-progress-fill (dipanggil berkali-kali per detik saat baris
+     diproses). Re-evaluasi :has() yang sangat sering ini ternyata
+     menyebabkan browser (terutama Chrome Android) "membekukan" ulang
+     animasi CSS lain di dalam elemen yang sama (.brand-spinner-ring jadi
+     berhenti berputar), walau progress bar-nya sendiri tetap berjalan
+     normal. SOLUSI: ganti total dari :has() ke class biasa
+     (.loading-overlay-progress) yang di-toggle oleh JavaScript
+     (showImportProgress/hideImportProgress) — class biasa TIDAK dievaluasi
+     ulang oleh browser saat elemen turunannya berubah, jadi tidak ada lagi
+     efek samping ke animasi lain. */
+  .loading-overlay.loading-overlay-progress {
     flex-direction: column;
     align-items: stretch;
     padding: 16px 18px;
@@ -3944,7 +3951,7 @@
     width: 260px;
     max-width: calc(100vw - 48px);
   }
-  .loading-overlay:has(#importProgressWrap:not(.hidden)) .brand-spinner {
+  .loading-overlay.loading-overlay-progress .brand-spinner {
     margin-right: 10px;
   }
   .loading-text { font-size: 13px; font-weight: 700; color: var(--gray-700); letter-spacing: .2px; white-space: nowrap; }
