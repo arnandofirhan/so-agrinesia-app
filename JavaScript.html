@@ -863,6 +863,11 @@ function showSplashText(text) {
 // jadi persen yang ditampilkan itu asli, bukan sekadar indeks batch.
 function showImportProgress(text) {
   showLoading(text);
+  const overlay = document.getElementById('loadingOverlay');
+  // FIX (ring loading berhenti berputar): class ini dulunya dideteksi
+  // otomatis lewat CSS :has() yang ternyata bermasalah (lihat komentar
+  // panjang di Stylesheet.html) — sekarang ditoggle manual di sini.
+  if (overlay) overlay.classList.add('loading-overlay-progress');
   const wrap = document.getElementById('importProgressWrap');
   if (wrap) wrap.classList.remove('hidden');
   updateImportProgress(0);
@@ -877,6 +882,8 @@ function updateImportProgress(percent) {
 function hideImportProgress() {
   const wrap = document.getElementById('importProgressWrap');
   if (wrap) wrap.classList.add('hidden');
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.remove('loading-overlay-progress');
   hideLoading();
 }
 
