@@ -7078,7 +7078,7 @@ function confirmDeleteSo(soId, refreshTarget) {
     confirmLabel: 'Ya, Hapus',
     confirmClass: 'btn-danger',
     onConfirm: async function() {
-      const res = await callServer('deleteStockOpname', { currentUser: CURRENT_USER, soId: so.soId }, { loadingText: 'Menghapus SO...' });
+      const res = await callServer('deleteStockOpname', { currentUser: CURRENT_USER, soId: so.soId }, { loadingText: 'Menghapus ' + so.soId + '...' });
       if (res.success) {
         showToast(res.message, 'success');
         invalidateCache(); 
