@@ -302,6 +302,26 @@
     -moz-osx-font-smoothing: grayscale;
     transition: background .2s var(--ease), color .2s var(--ease);
     overflow-x: hidden;
+    /* FIX (bug besar: pull-to-refresh di 1 menu malah balik ke Dashboard
+       & semua menu ikut reload skeleton): aplikasi ini py pull-to-refresh
+       KUSTOM sendiri (lihat blok IIFE "watchContentReflow"/touchstart-
+       touchmove-touchend di bagian bawah file JS) yang seharusnya HANYA
+       me-refresh data halaman yang sedang dibuka. TAPI browser (terutama
+       Chrome Android) py fitur PULL-TO-REFRESH BAWAAN sendiri yang aktif
+       secara default di halaman manapun ketika discroll sampai paling atas
+       lalu ditarik lagi — dan fitur bawaan itu TIDAK tahu-menahu soal SPA,
+       jadi yang dilakukannya adalah RELOAD TOTAL HALAMAN (F5 penuh).
+       Kedua pull-to-refresh (punya kita & punya browser) SAMA-SAMA
+       terpicu bersamaan oleh gesture tarik-turun yang sama, dan reload
+       total dari browser itulah yang memicu ulang seluruh proses init
+       aplikasi dari nol (checkSession -> enterApp -> navigateTo(
+       'dashboard')) — persis kenapa hasilnya selalu "balik ke Dashboard"
+       apapun menu yang sedang dibuka saat pull-to-refresh dilakukan.
+       overscroll-behavior-y:contain mematikan HANYA fitur pull-to-refresh
+       bawaan browser ini, TANPA mematikan scroll biasa sama sekali —
+       pull-to-refresh kustom kita (JS) tetap berjalan normal seperti
+       biasa setelah ini. */
+    overscroll-behavior-y: contain;
   }
   /* Fallback warna body saat login page tampil: kalau ada celah viewport
      (mis. gesture nav bar Android yang tidak konsisten dihitung 100vh),
