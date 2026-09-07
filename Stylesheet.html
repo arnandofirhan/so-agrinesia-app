@@ -4818,6 +4818,23 @@
     .btn-label-short { display: inline; }
 
     .content { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+
+    /* FIX (scrollbar "tembus" topbar): di breakpoint ini yang discroll
+       adalah seluruh dokumen (html/body), bukan .content sendiri — topbar
+       cuma position:sticky di dalam alur scroll yang sama, jadi track
+       scrollbar (walau tipis) tetap membentang dari paling atas dokumen
+       dan terlihat menimpa ikon-ikon topbar. Scroll dokumennya sendiri
+       tetap jalan normal tanpa indikator ini (device sentuh tidak butuh
+       scrollbar terlihat) — ini murni menghilangkan artefak visualnya,
+       tidak mengubah cara scroll/pull-to-refresh bekerja sama sekali. */
+    html, body {
+      scrollbar-width: none;
+    }
+    html::-webkit-scrollbar, body::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
   }
 
   .bottom-nav {
