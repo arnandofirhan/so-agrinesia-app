@@ -344,6 +344,39 @@ function invalidateCache(key, opts) {
     });
     return;
   }
+  if (opts && opts.page) {
+    // FIX (pull-to-refresh di 1 menu bikin SEMUA menu ikut ke-refresh):
+    // beberapa halaman berbeda (Dashboard, Stock Opname, Riwayat SO) sama-
+    // sama pakai prefix cache "soList:" (hanya beda isi statusFilter di
+    // dalam JSON key-nya) — jadi menghapus semua key berprefix "soList:"
+    // otomatis ikut menghapus cache milik halaman LAIN yang kebetulan
+    // memakai prefix sama. Di sini, hanya key yang isinya benar-benar
+    // cocok dengan "tanda tangan" (signature) halaman yang diminta yang
+    // dihapus, bukan seluruh prefix.
+    const PAGE_CACHE_SIGNATURES = {
+      dashboard: ['dashboard:', 'tren:', '"statusFilter":"selesai"', 'weeklySoStatus:'],
+      stockOpname: ['"statusFilter":"active"'],
+      riwayat: ['"tanggalMulai"', '"selisihType"'],
+      laporan: ['laporanData:', 'perbandinganPeriode:'],
+      auditSelisih: ['auditSelisih:', 'itemsEverSelisih'],
+      itemMaster: ['itemMaster', 'itemDetail:', 'itemDrilldown:'],
+      bandingPeriode: ['perbandinganPeriode:'],
+      activityLog: ['activityLog:'],
+      userManagement: ['userList'],
+      storeManagement: ['storeMasterList', 'storeList'],
+      categoryManagement: ['categoryList', 'categoryMasterList'],
+      rolePermission: ['rolePermissionData']
+    };
+    const signatures = PAGE_CACHE_SIGNATURES[opts.page];
+    if (signatures) {
+      Object.keys(_CACHE_STORE).forEach(function(k) {
+        if (signatures.some(function(sig) { return k.indexOf(sig) !== -1; })) {
+          delete _CACHE_STORE[k];
+        }
+      });
+    }
+    return;
+  }
   Object.keys(_CACHE_STORE).forEach(function(k) { delete _CACHE_STORE[k]; });
 }
 
@@ -9656,7 +9689,7 @@ function toggleCategoryStatusAction(categoryId, nama) {
         indicator.style.transform = 'translateY(' + (THRESHOLD * 0.7) + 'px)';
         indicator.style.opacity = '1';
       }
-      invalidateCache();
+      invalidateCache(null, { page: CURRENT_PAGE });
       navigateTo(CURRENT_PAGE, LAST_NAV_PARAMS);
       setTimeout(resetIndicator, 700);
     } else {
