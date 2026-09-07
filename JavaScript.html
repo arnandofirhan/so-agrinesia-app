@@ -5232,6 +5232,7 @@ async function exportSoFormExcel(soId) {
   const idxHarga = cols.findIndex(function(c) { return c.key === 'harga'; });
   const idxSelisihQty = cols.findIndex(function(c) { return c.key === 'selisihQty'; });
   const idxSelisihRp = cols.findIndex(function(c) { return c.key === 'selisihRp'; });
+  const idxKodeItem = cols.findIndex(function(c) { return c.key === 'kodeItem'; });
   const colQtySistem = XLSX.utils.encode_col(idxQtySistem);
   const colQtyFisikDepan = XLSX.utils.encode_col(idxQtyFisikDepan);
   const colQtyFisikGudang = XLSX.utils.encode_col(idxQtyFisikGudang);
@@ -5239,7 +5240,38 @@ async function exportSoFormExcel(soId) {
   const colHarga = XLSX.utils.encode_col(idxHarga);
   const colSelisihQty = XLSX.utils.encode_col(idxSelisihQty);
   const colSelisihRp = XLSX.utils.encode_col(idxSelisihRp);
+  const colKodeItem = XLSX.utils.encode_col(idxKodeItem);
   const FORMAT_RP = '"Rp"* #,##0;"Rp"* -#,##0;"Rp"* -';
+
+  // ===== Sheet "IMPORT" =====
+  // Berisi data mentah dengan header & URUTAN KOLOM PERSIS seperti file
+  // yang diimport via "Import Stock Sistem" (Judul Produk, Nomor SKU, Unit
+  // dalam Persediaan). Sumbernya BUKAN file asli yang diupload — file itu
+  // tidak pernah disimpan di server, hanya dipakai sekali untuk meng-update
+  // angka Stock Sistem di detail SO. Sheet ini dibangun ulang dari data
+  // "Stock Sistem" yang SUDAH tersimpan di SO saat ini, yang isinya
+  // identik dengan file asli (karena memang dari situ asalnya) — pendekatan
+  // ini dipilih supaya TIDAK perlu menyimpan salinan file mentah di
+  // database (hemat tempat), sambil tetap bisa export sheet IMPORT kapan
+  // saja tanpa terikat harus dilakukan di sesi yang sama dengan saat
+  // import berlangsung.
+  const importAoa = [['Judul Produk', 'Nomor SKU', 'Unit dalam Persediaan']];
+  so.details.forEach(function(d) {
+    importAoa.push([d.nama, d.sku, d.stockSistem]);
+  });
+  const wsImport = XLSX.utils.aoa_to_sheet(importAoa);
+  wsImport['A1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'C6D9B0' } } };
+  wsImport['B1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'C6D9B0' } } };
+  wsImport['C1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'C6D9B0' } } };
+  wsImport['!cols'] = [{ wch: 40 }, { wch: 14 }, { wch: 18 }];
+  const IMPORT_SHEET_NAME = 'IMPORT';
+  // Range VLOOKUP mengarah ke SELURUH kolom B:C (Nomor SKU -> Unit dalam
+  // Persediaan), BUKAN cuma sampai baris terakhir saat ini, supaya kalau
+  // sheet IMPORT ditambah baris manual di Excel nanti, rumus di Form SO
+  // tetap ikut membaca tanpa perlu diedit. Kolom awal range sengaja B
+  // (bukan A) karena SKU ada di kolom B pada urutan file asli, dan VLOOKUP
+  // hanya bisa mencari di kolom PALING KIRI dari range yang diberikan.
+  const importRange = IMPORT_SHEET_NAME + '!B:C';
 
   // Range baris data (per kategori, EXCLUDING baris subtotal) dipakai untuk
   // rumus SUM di baris subtotal, dan dikumpulkan lagi untuk rumus SUM di
@@ -5313,6 +5345,28 @@ async function exportSoFormExcel(soId) {
           ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
         }
         cellStyle.numFmt = FORMAT_RP;
+      } else if (ci === idxQtySistem) {
+        // Qty Sistem = VLOOKUP ke sheet IMPORT berdasarkan Item Kode (SKU).
+        // Sheet IMPORT: kolom A=Judul Produk, B=Nomor SKU, C=Unit dalam
+        // Persediaan (urutan sama persis dengan file yang diimport user).
+        // VLOOKUP dicari di range B:C (SKU di kolom paling kiri dari range
+        // ini) supaya hasilnya (kolom ke-2 dari range = kolom C) adalah
+        // Unit dalam Persediaan. Contoh hasil: =IFNA(VLOOKUP(E5,IMPORT!B:C,2,FALSE),0)
+        // IFNA membungkus VLOOKUP supaya SKU yang (untuk alasan apapun)
+        // tidak ketemu di sheet IMPORT tidak menghasilkan error #N/A di
+        // Form SO, melainkan jatuh ke 0 — konsisten dengan cara Qty Sistem
+        // 0 diperlakukan di tempat lain pada form ini.
+        if (isDataRow) {
+          const kodeItemAddr = colKodeItem + excelRowNum;
+          ws[addr] = { t: 'n', f: 'IFNA(VLOOKUP(' + kodeItemAddr + ',' + importRange + ',2,FALSE),0)', v: (typeof v === 'number' ? v : 0) };
+        } else if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colQtySistem + r[0] + ':' + colQtySistem + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colQtySistem + r[0] + ':' + colQtySistem + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+        }
+        cellStyle.numFmt = '#,##0';
       } else if (isNumCol) {
         const n = typeof v === 'number' ? v : parseFloat(v);
         if (v === '' || v === null || v === undefined) {
@@ -5389,6 +5443,7 @@ async function exportSoFormExcel(soId) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, spec.sheetName.substring(0, 31));
+  XLSX.utils.book_append_sheet(wb, wsImport, IMPORT_SHEET_NAME);
   XLSX.writeFile(wb, spec.filenameBase + '_' + exportTimestamp() + '.xlsx');
   showToast('Export Form SO berhasil.', 'success');
 }
