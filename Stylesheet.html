@@ -3632,6 +3632,25 @@
     display: flex; flex-direction: column; gap: 10px;
     max-width: calc(100vw - 40px);
   }
+  /* FIX (konsistensi UI/UX, permintaan): toast "berhasil" (create SO,
+     delete SO, import selesai, dll) SEBELUMNYA nempel di kanan-atas
+     dengan lebar tetap 320px — beda pola dengan toast loading yang sudah
+     dipindah top-center. Disamakan di sini supaya SEMUA notifikasi
+     (sedang proses maupun sudah selesai) konsisten muncul di tengah-atas
+     di HP, lebar menyesuaikan konten (tidak pernah kepotong). Desktop
+     tetap di kanan-atas seperti semula. */
+  @media (max-width: 640px) {
+    .toast-container {
+      top: 16px; right: auto; left: 50%;
+      transform: translateX(-50%);
+      align-items: center;
+      max-width: calc(100vw - 32px);
+    }
+    .toast {
+      width: max-content;
+      max-width: 100%;
+    }
+  }
   .toast {
     position: relative;
     overflow: hidden;
