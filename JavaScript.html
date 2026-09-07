@@ -3639,8 +3639,11 @@ function openImportItemModal() {
 
   document.getElementById('processImportItemBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
-    const btn = this;
-    btn.disabled = true;
+
+    // FIX (permintaan UI/UX): tutup modal upload otomatis begitu proses
+    // dimulai — sama seperti import Stock Sistem — supaya user tidak bisa
+    // klik-klik lagi (ganti file, Batal, dst) selagi import berjalan.
+    closeModal();
 
     // FIX UTAMA (import ~900 baris gagal): sebelumnya SELURUH rows dikirim
     // dalam SATU request tanpa dipecah sama sekali — sekarang dipecah
@@ -3666,8 +3669,6 @@ function openImportItemModal() {
       'Mengimport item master...'
     );
 
-    btn.disabled = false;
-
     if (result.success) {
       const stats = result.stats;
       showStatsToast(
@@ -3682,7 +3683,6 @@ function openImportItemModal() {
         ],
         'success'
       );
-      closeModal();
       loadItemMasterTable(true);
     } else {
       showToast(result.message, 'error');
@@ -3749,8 +3749,8 @@ function openImportBarcodeModal() {
 
   document.getElementById('processImportBarcodeBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
-    const btn = this;
-    btn.disabled = true;
+
+    closeModal();
 
     const result = await runChunkedImport(
       'importItemMaster',
@@ -3767,8 +3767,6 @@ function openImportBarcodeModal() {
       'Mengimport barcode...'
     );
 
-    btn.disabled = false;
-
     if (result.success) {
       const stats = result.stats;
       showStatsToast(
@@ -3781,7 +3779,6 @@ function openImportBarcodeModal() {
         ],
         'success'
       );
-      closeModal();
       loadItemMasterTable(true);
     } else {
       showToast(result.message, 'error');
@@ -5897,8 +5894,14 @@ function openImportStockModal() {
   document.getElementById('processImportStockBtn').addEventListener('click', async function() {
     if (!parsedRows || !parsedRows.length) return;
 
-    const btn = this;
-    btn.disabled = true;
+    // FIX (permintaan UI/UX): modal upload file SEBELUMNYA tetap terbuka
+    // & masih bisa diklik/di-drag file baru selama proses import berjalan
+    // di background — membingungkan karena user bisa memilih file lain
+    // atau klik "Batal" padahal proses sudah berjalan. Modal ditutup
+    // otomatis di sini begitu proses dimulai; progress selanjutnya cukup
+    // terlihat lewat bottom sheet (runChunkedImport -> showImportProgress)
+    // yang sudah py progress bar & persen sendiri.
+    closeModal();
 
     // Berapapun jumlah baris di file (900, 5000, dst) ditangani otomatis
     // oleh runChunkedImport dengan progress bar 0-100% asli — lihat definisi
@@ -5918,8 +5921,6 @@ function openImportStockModal() {
       'Mengimport stock sistem...'
     );
 
-    btn.disabled = false;
-
     if (!result.success) {
       showToast(result.message, 'error');
       return;
@@ -5936,7 +5937,6 @@ function openImportStockModal() {
       hasNotFound ? 'error' : 'success'
     );
     invalidateCache(null, { tipeSo: CURRENT_SO_DETAIL.tipeSo });
-    closeModal();
     renderSoDetail(CURRENT_SO_DETAIL.soId);
   });
 }
