@@ -28,7 +28,7 @@
  * bukan terus memakai versi lama dari cache.
  * ======================================================================
  */
-var CACHE_VERSION = 'so-shell-v22';
+var CACHE_VERSION = 'so-shell-v23';
 var SHELL_ASSETS = [
   './index.html',
   './Stylesheet.html',
