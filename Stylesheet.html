@@ -321,7 +321,18 @@
        bawaan browser ini, TANPA mematikan scroll biasa sama sekali —
        pull-to-refresh kustom kita (JS) tetap berjalan normal seperti
        biasa setelah ini. */
-    overscroll-behavior-y: contain;
+    /* FIX (topbar & bottom-nav ikut "kepotong"/geser saat scroll ditahan
+       mentok atas/bawah): "contain" saja cuma memutus rantai scroll ke
+       parent, TIDAK mematikan efek rubber-band bounce dokumen itu sendiri
+       — jadi pas discroll & ditahan sampai batas, seluruh dokumen masih
+       "mental" sesaat dan menyeret .topbar (sticky) & .bottom-nav (fixed)
+       ikut bergerak/terpotong. "none" (bukan cuma contain) mematikan efek
+       bounce itu sepenuhnya di kedua sumbu, sehingga topbar & bottom-nav
+       benar-benar diam. Ini TIDAK mematikan pull-to-refresh kustom (JS)
+       kita karena itu jalan dari event touchstart/touchmove sendiri, sama
+       sekali tidak bergantung pada overscroll-behavior (properti ini cuma
+       mengatur efek visual native browser, bukan event JS). */
+    overscroll-behavior: none;
   }
   /* Fallback warna body saat login page tampil: kalau ada celah viewport
      (mis. gesture nav bar Android yang tidak konsisten dihitung 100vh),
