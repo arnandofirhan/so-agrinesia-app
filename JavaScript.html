@@ -5358,7 +5358,17 @@ async function exportSoFormExcel(soId) {
         // 0 diperlakukan di tempat lain pada form ini.
         if (isDataRow) {
           const kodeItemAddr = colKodeItem + excelRowNum;
-          ws[addr] = { t: 'n', f: 'IFNA(VLOOKUP(' + kodeItemAddr + ',' + importRange + ',2,FALSE),0)', v: (typeof v === 'number' ? v : 0) };
+          // PENTING: fungsi IFNA baru ada sejak Excel 2013 (bukan fungsi
+          // "lama" seperti VLOOKUP/SUM). Kalau ditulis apa adanya ke XML
+          // mentah lewat SheetJS (bukan disimpan oleh Excel sendiri), Excel
+          // TIDAK mengenali nama fungsinya dan menampilkan #NAME? sampai
+          // sel-nya diedit manual lalu Enter (baru dihitung ulang pakai
+          // tabel fungsi Excel sendiri dan jadi benar). WPS lebih toleran
+          // makanya tidak masalah di sana. Wajib diberi prefix "_xlfn."
+          // supaya Excel langsung mengenalinya sejak file dibuka pertama
+          // kali — prefix ini hanya ada di file mentah, di Excel tetap
+          // tampil sebagai IFNA(...) biasa.
+          ws[addr] = { t: 'n', f: '_xlfn.IFNA(VLOOKUP(' + kodeItemAddr + ',' + importRange + ',2,FALSE),0)', v: (typeof v === 'number' ? v : 0) };
         } else if (isSubtotal) {
           const r = allCatRanges[allCatRanges.length - 1];
           ws[addr] = { t: 'n', f: 'SUM(' + colQtySistem + r[0] + ':' + colQtySistem + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
