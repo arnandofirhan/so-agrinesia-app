@@ -3417,18 +3417,16 @@ function wireKategoriSelectNewOption(selectId) {
   });
 }
 
-async function openAddItemModal(prefill) {
-  prefill = prefill || {};
+async function openAddItemModal() {
   await getCategoryListCached();
   openModal(
     modalHeaderHtml({ icon: ICONS.plus, color: 'primary', title: 'Tambah Item', subtitle: 'Tambahkan item baru ke Item Master' }) +
     '<div class="modal-body">' +
-      '<div class="form-group"><label>SKU</label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newItemSku" placeholder="Contoh: ATJ00001" value="' + escapeHtml(prefill.sku || '') + '"></div></div>' +
-      '<div class="form-group"><label>Nama Item</label><div class="field-icon-wrap">' + ICONS.note + '<input type="text" id="newItemNama" placeholder="Nama produk" value="' + escapeHtml(prefill.nama || '') + '"></div></div>' +
+      '<div class="form-group"><label>SKU</label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newItemSku" placeholder="Contoh: ATJ00001"></div></div>' +
+      '<div class="form-group"><label>Nama Item</label><div class="field-icon-wrap">' + ICONS.note + '<input type="text" id="newItemNama" placeholder="Nama produk"></div></div>' +
       '<div class="form-group"><label>Kategori</label><div class="field-icon-wrap">' + ICONS.filterField + '<select id="newItemKategori">' + kategoriSelectOptionsHtml('') + '</select></div></div>' +
       '<div class="form-group"><label>Harga</label><div class="field-icon-wrap">' + ICONS.scale + '<input type="number" id="newItemHarga" placeholder="0"></div></div>' +
       '<div class="form-group"><label>Barcode <span style="font-weight:400;color:var(--gray-400);">(Opsional)</span></label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newItemBarcode" placeholder="Scan atau ketik nomor barcode"></div></div>' +
-      (prefill.stock !== undefined ? '<div class="import-warning">Stock sistem <strong>' + escapeHtml(String(prefill.stock)) + '</strong> dari file import akan otomatis ditambahkan ke SO ini setelah item disimpan.</div>' : '') +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Batal</button>' +
@@ -3462,15 +3460,8 @@ async function openAddItemModal(prefill) {
         showToast(res.message, 'success');
         closeModal();
         invalidateCache('categoryMasterList');
-        if (prefill.stock !== undefined && CURRENT_SO_DETAIL && CURRENT_SO_DETAIL.soId) {
-          await callServer('importStockToSo', { soId: CURRENT_SO_DETAIL.soId, rows: [{ sku: item.sku, stock: prefill.stock }], currentUser: CURRENT_USER }, { silent: true });
-          invalidateCache(null, { tipeSo: CURRENT_SO_DETAIL.tipeSo });
-          renderSoDetail(CURRENT_SO_DETAIL.soId);
-          if (typeof prefill.onDone === 'function') prefill.onDone(item.sku);
-        } else {
-          await loadItemMasterTable(true);
-          flashRowSuccess(document.querySelector('#itemTableBody tr[data-sku="' + CSS.escape(item.sku) + '"]'));
-        }
+        await loadItemMasterTable(true);
+        flashRowSuccess(document.querySelector('#itemTableBody tr[data-sku="' + CSS.escape(item.sku) + '"]'));
       } else {
         showToast(res.message, 'error');
       }
@@ -6132,53 +6123,109 @@ function openImportStockModal() {
 }
 
 function openNotFoundSkuModal(notFoundList) {
-  const rowsHtml = notFoundList.map(function(r, idx) {
-    return '<div class="notfound-sku-row" data-idx="' + idx + '">' +
-      '<div><code>' + escapeHtml(r.sku) + '</code><div class="notfound-sku-stock">Stock sistem: ' + escapeHtml(String(r.stock)) + (r.nama ? ' &middot; ' + escapeHtml(r.nama) : '') + '</div></div>' +
-      '<button class="btn btn-secondary btn-sm notfound-add-btn" data-idx="' + idx + '">+ Tambah</button>' +
-    '</div>';
-  }).join('');
+  let remaining = notFoundList.slice();
 
-  openModal(
-    modalHeaderHtml({ icon: ICONS.warningTriangle || ICONS.close, color: 'red', title: notFoundList.length + ' SKU tidak terdaftar', subtitle: 'Item ini belum ada di Item Master, jadi belum ikut terhitung di SO ini' }) +
-    '<div class="modal-body" style="padding-top:0;">' +
-      '<button class="btn btn-secondary btn-block" id="exportNotFoundSkuBtn" style="margin-bottom:10px;">' + ICONS.download + ' Export daftar SKU (untuk isi massal di Excel)</button>' +
-      '<div class="notfound-sku-list">' + rowsHtml + '</div>' +
-    '</div>' +
-    '<div class="modal-footer">' +
-      '<button class="btn btn-primary" onclick="closeModal()">Tutup</button>' +
-    '</div>'
-  );
+  function renderList() {
+    if (!remaining.length) { closeModal(); return; }
+    const rowsHtml = remaining.map(function(r, idx) {
+      return '<div class="notfound-sku-row" data-idx="' + idx + '">' +
+        '<div><code>' + escapeHtml(r.sku) + '</code><div class="notfound-sku-stock">Stock sistem: ' + escapeHtml(String(r.stock)) + (r.nama ? ' &middot; ' + escapeHtml(r.nama) : '') + '</div></div>' +
+        '<button class="btn btn-secondary btn-sm notfound-add-btn" data-idx="' + idx + '">+ Tambah</button>' +
+      '</div>';
+    }).join('');
 
-  document.getElementById('exportNotFoundSkuBtn').addEventListener('click', function() {
-    const csvRows = [['SKU', 'Stock Sistem', 'Nama (jika ada)']].concat(
-      notFoundList.map(function(r) { return [r.sku, r.stock, r.nama || '']; })
+    openModal(
+      modalHeaderHtml({ icon: ICONS.warningTriangle || ICONS.close, color: 'red', title: remaining.length + ' SKU tidak terdaftar', subtitle: 'Item ini belum ada di Item Master, jadi belum ikut terhitung di SO ini' }) +
+      '<div class="modal-body" style="padding-top:0;">' +
+        '<button class="btn btn-secondary btn-block" id="exportNotFoundSkuBtn" style="margin-bottom:10px;">' + ICONS.download + ' Export daftar SKU (untuk isi massal di Excel)</button>' +
+        '<div class="notfound-sku-list">' + rowsHtml + '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-primary" onclick="closeModal()">Tutup</button>' +
+      '</div>'
     );
-    const csvContent = csvRows.map(function(row) {
-      return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
-    }).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'sku-tidak-terdaftar-' + (CURRENT_SO_DETAIL ? CURRENT_SO_DETAIL.soId : 'export') + '.csv';
-    link.click();
-  });
 
-  document.querySelectorAll('.notfound-add-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      const idx = Number(btn.getAttribute('data-idx'));
-      const r = notFoundList[idx];
-      openAddItemModal({
-        sku: r.sku,
-        nama: r.nama || '',
-        stock: r.stock,
-        onDone: function() {
-          const row = document.querySelector('.notfound-sku-row[data-idx="' + idx + '"]');
-          if (row) row.remove();
+    document.getElementById('exportNotFoundSkuBtn').addEventListener('click', function() {
+      const csvRows = [['SKU', 'Stock Sistem', 'Nama (jika ada)']].concat(
+        remaining.map(function(r) { return [r.sku, r.stock, r.nama || '']; })
+      );
+      const csvContent = csvRows.map(function(row) {
+        return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'sku-tidak-terdaftar-' + (CURRENT_SO_DETAIL ? CURRENT_SO_DETAIL.soId : 'export') + '.csv';
+      link.click();
+    });
+
+    document.querySelectorAll('.notfound-add-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const idx = Number(btn.getAttribute('data-idx'));
+        await renderInlineAddForm(remaining[idx], idx);
+      });
+    });
+  }
+
+  async function renderInlineAddForm(r, idx) {
+    await getCategoryListCached();
+    openModal(
+      modalHeaderHtml({ icon: ICONS.plus, color: 'primary', title: 'Tambah Item', subtitle: 'Tambahkan item baru ke Item Master' }) +
+      '<div class="modal-body">' +
+        '<div class="form-group"><label>SKU</label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newItemSku" placeholder="Contoh: ATJ00001" value="' + escapeHtml(r.sku || '') + '"></div></div>' +
+        '<div class="form-group"><label>Nama Item</label><div class="field-icon-wrap">' + ICONS.note + '<input type="text" id="newItemNama" placeholder="Nama produk" value="' + escapeHtml(r.nama || '') + '"></div></div>' +
+        '<div class="form-group"><label>Kategori</label><div class="field-icon-wrap">' + ICONS.filterField + '<select id="newItemKategori">' + kategoriSelectOptionsHtml('') + '</select></div></div>' +
+        '<div class="form-group"><label>Harga</label><div class="field-icon-wrap">' + ICONS.scale + '<input type="number" id="newItemHarga" placeholder="0"></div></div>' +
+        '<div class="form-group"><label>Barcode <span style="font-weight:400;color:var(--gray-400);">(Opsional)</span></label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newItemBarcode" placeholder="Scan atau ketik nomor barcode"></div></div>' +
+        '<div class="import-warning">Stock sistem <strong>' + escapeHtml(String(r.stock)) + '</strong> dari file import akan otomatis ditambahkan ke SO ini setelah item disimpan.</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" id="backToNotFoundListBtn">Kembali</button>' +
+        '<button class="btn btn-primary" id="saveNewItemBtn" disabled>' + ICONS.save + ' Simpan</button>' +
+      '</div>'
+    );
+    wireKategoriSelectNewOption('newItemKategori');
+    document.getElementById('backToNotFoundListBtn').addEventListener('click', renderList);
+    const saveBtn = document.getElementById('saveNewItemBtn');
+    const validation = attachFormValidation([
+      { id: 'newItemSku', label: 'SKU' },
+      { id: 'newItemNama', label: 'Nama item', validate: function(v) { return v.length < 3 ? 'Nama item minimal 3 karakter' : null; } },
+      { id: 'newItemHarga', label: 'Harga', validate: function(v) {
+        return (isNaN(Number(v)) || Number(v) < 0) ? 'Harga harus berupa angka valid' : null;
+      } }
+    ], saveBtn);
+    saveBtn.addEventListener('click', function() {
+      if (!validation.validateAll()) return;
+      const kategoriVal = document.getElementById('newItemKategori').value;
+      if (kategoriVal === NEW_CATEGORY_OPTION_VALUE_) { showToast('Pilih atau buat kategori terlebih dahulu.', 'error'); return; }
+      runWithButtonLoading(this, async function() {
+        const item = {
+          sku: document.getElementById('newItemSku').value.trim(),
+          nama: document.getElementById('newItemNama').value.trim(),
+          harga: document.getElementById('newItemHarga').value,
+          kategori: kategoriVal,
+          barcode: document.getElementById('newItemBarcode').value.trim(),
+          currentUser: CURRENT_USER
+        };
+        const res = await callServer('addItemMaster', item, { silent: true });
+        if (res.success) {
+          showToast(res.message, 'success');
+          invalidateCache('categoryMasterList');
+          if (CURRENT_SO_DETAIL && CURRENT_SO_DETAIL.soId) {
+            await callServer('importStockToSo', { soId: CURRENT_SO_DETAIL.soId, rows: [{ sku: item.sku, stock: r.stock }], currentUser: CURRENT_USER }, { silent: true });
+            invalidateCache(null, { tipeSo: CURRENT_SO_DETAIL.tipeSo });
+            renderSoDetail(CURRENT_SO_DETAIL.soId);
+          }
+          remaining = remaining.filter(function(x) { return x !== r; });
+          renderList();
+        } else {
+          showToast(res.message, 'error');
         }
       });
     });
-  });
+  }
+
+  renderList();
 }
 
 var _scanBarcodeHtml5QrCode = null;
