@@ -251,7 +251,11 @@
   html[data-theme="dark"] .theme-toggle-btn .icon-moon { display: none; }
 
   .tipe-so-toggle { display: inline-flex; background: var(--gray-100); border-radius: 999px; padding: 3px; gap: 2px; flex-shrink: 0; }
-  .tipe-so-toggle-btn { border: none; background: transparent; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; color: var(--gray-500); cursor: pointer; transition: background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease), transform .1s; white-space: nowrap; touch-action: manipulation; }
+  .tipe-so-toggle-btn { border: none; background: transparent; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; color: var(--gray-500); cursor: pointer; transition: background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease), transform .1s; white-space: nowrap; touch-action: manipulation; display: inline-flex; align-items: center; justify-content: center; outline: none; -webkit-tap-highlight-color: transparent; }
+  .tipe-so-toggle-btn:focus,
+  .tipe-so-toggle-btn:focus-visible { outline: none; box-shadow: none; }
+  .tipe-so-toggle-btn.active:focus,
+  .tipe-so-toggle-btn.active:focus-visible { box-shadow: 0 2px 6px rgba(12,92,48,0.28); }
   .tipe-so-toggle-btn:hover:not(.active) { color: var(--gray-700); }
   .tipe-so-toggle-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(12,92,48,0.28); }
   .tipe-so-toggle-btn.active:active { transform: scale(0.97); }
@@ -4818,9 +4822,9 @@
     .page-header h2 { font-size: 15.5px; }
     .page-header { gap: 8px; }
     .page-header-actions { gap: 8px; }
-    .tipe-so-toggle-btn { padding: 6px 10px; font-size: 11.5px; }
+    .tipe-so-toggle-btn { padding: 6px 8px; font-size: 11.5px; }
     .tipe-so-toggle { flex-basis: 100%; order: -1; display: flex; width: 100%; }
-    .tipe-so-toggle-btn { flex: 1 1 0; text-align: center; }
+    .tipe-so-toggle-btn { flex: 1 1 0; text-align: center; display: flex; align-items: center; justify-content: center; }
     .page-header-actions .btn { padding: 8px 14px; font-size: 12.5px; }
     .filter-bar { padding: 8px 10px; gap: 5px; }
     .filter-bar-fields { gap: 5px; }
