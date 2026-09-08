@@ -8458,7 +8458,7 @@ async function renderRolePermission(force) {
 
   content.innerHTML =
     '<div class="page-header"><h2>Role & Permission</h2>' +
-      '<button class="btn btn-primary" id="btnAddRole">' + ICONS.plus + ' Tambah Role</button>' +
+      '<button class="btn btn-primary btn-sm" id="btnAddRole">' + ICONS.plus + ' Tambah Role</button>' +
     '</div>' +
     '<div class="role-perm-layout">' +
       '<div class="card role-list-panel" id="rolePermListPanel">' + (cachedRes && cachedRes.success ? '' : skeletonBarsHtml(4)) + '</div>' +
@@ -8804,7 +8804,7 @@ async function renderUserManagement() {
   const content = document.getElementById('pageContent');
   content.innerHTML =
     '<div class="page-header"><h2>User Management</h2>' +
-      '<button class="btn btn-primary" id="btnAddUser">' + ICONS.plus + ' Tambah User</button>' +
+      '<button class="btn btn-primary btn-sm" id="btnAddUser">' + ICONS.plus + ' Tambah User</button>' +
     '</div>' +
     '<div class="filter-bar">' +
       '<div class="filter-bar-fields">' +
@@ -9252,7 +9252,7 @@ async function renderStoreManagement() {
   content.innerHTML =
     '<div class="stat-grid" id="storeKpiGrid">' + (hasCachedStores ? '' : skeletonStatGridHtml(4)) + '</div>' +
     '<div class="page-header"><h2>Store Management</h2>' +
-      '<button class="btn btn-primary" id="btnAddStore">' + ICONS.plus + ' Tambah Store</button>' +
+      '<button class="btn btn-primary btn-sm" id="btnAddStore">' + ICONS.plus + ' Tambah Store</button>' +
     '</div>' +
     '<div class="filter-bar">' +
       '<div class="filter-bar-fields">' +
