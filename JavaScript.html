@@ -4244,7 +4244,7 @@ async function renderStockOpname(params) {
   content.innerHTML =
     '<div class="page-header"><h2>Stock Opname</h2>' +
       '<div class="page-header-actions">' + tipeSoToggleHtml('stockOpname') +
-        (isReadOnlyRole() ? '' : '<button class="btn btn-primary" id="btnCreateSo">' + ICONS.plus + ' Buat Stock Opname</button>') +
+        (isReadOnlyRole() ? '' : '<button class="btn btn-primary" id="btnCreateSo">' + ICONS.plus + ' <span class="btn-label-full">Buat Stock Opname</span></button>') +
       '</div>' +
     '</div>' +
     '<div class="filter-bar">' +
