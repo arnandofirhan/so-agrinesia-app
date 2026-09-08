@@ -790,7 +790,11 @@
     transition: all .15s var(--ease);
     white-space: nowrap;
     letter-spacing: .1px;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
   }
+  .btn:focus,
+  .btn:focus-visible { outline: none; }
   .btn-block { width: 100%; }
   .btn-primary {
     background: var(--primary);
@@ -4834,6 +4838,17 @@
     .btn-label-short { display: inline; }
     #btnCreateSo { padding: 8px 10px; border-radius: 50%; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto; flex-shrink: 0; }
     #btnCreateSo svg { width: 18px; height: 18px; }
+    .page-header:has(#btnAddItem) .page-header-actions { flex-wrap: nowrap; gap: 6px; }
+    .page-header:has(#btnAddItem) .export-widget .export-trigger-btn,
+    .page-header:has(#btnAddItem) #btnImportItem,
+    .page-header:has(#btnAddItem) #btnImportBarcode { padding: 8px; width: 36px; height: 36px; justify-content: center; }
+    .page-header:has(#btnAddItem) .export-widget .export-trigger-btn span:not(.export-icon-main),
+    .page-header:has(#btnAddItem) .export-widget .export-trigger-btn .export-chevron,
+    .page-header:has(#btnAddItem) #btnImportItem .btn-label-full,
+    .page-header:has(#btnAddItem) #btnImportItem .btn-label-short,
+    .page-header:has(#btnAddItem) #btnImportBarcode .btn-label-full,
+    .page-header:has(#btnAddItem) #btnImportBarcode .btn-label-short { display: none; }
+    .page-header:has(#btnAddItem) #btnAddItem { padding: 8px 12px; flex-shrink: 0; white-space: nowrap; margin-left: auto; }
 
     .content { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
 
