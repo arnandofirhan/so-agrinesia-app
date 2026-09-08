@@ -115,6 +115,13 @@
   <!-- html5-qrcode: dipertahankan persis seperti sebelumnya untuk fitur
        Scan Barcode saat Stock Opname. -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- Chart.js: WAJIB ada untuk grafik Dashboard (renderWeeklyTrendChart,
+       renderStoreComparisonChart di JavaScript.html memakai variabel global
+       `Chart`). Sebelumnya file ini TIDAK dimuat sama sekali, sehingga
+       `typeof Chart === 'undefined'` selalu true dan grafik selalu
+       menampilkan "Grafik tidak dapat dimuat" walau datanya ada. -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
