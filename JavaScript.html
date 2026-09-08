@@ -2509,9 +2509,10 @@ function renderDashboardStatGrid(d, params) {
   const akurasiColor = akurasiVal >= 95 ? 'green' : (akurasiVal >= 85 ? 'orange' : 'red');
 
   statGrid.innerHTML =
-    statCard(ICONS.percent, akurasiColor, akurasiVal.toFixed(2) + '%', 'Akurasi Stock', toRiwayatAkurasi, false,
-      'Akurasi = (1 − Total Selisih Absolut ÷ Total Stock Sistem) × 100%. Dihitung dari seluruh SO berstatus Selesai sesuai filter yang aktif saat ini (Store/Tanggal/' + TIPE_SO_STATE.dashboard + ').') +
-    statCard(ICONS.clipboard, 'green', formatNumber(d.soCount), 'SO Selesai', toRiwayatSoCount) +
+    statCardFeatured(ICONS.percent, akurasiColor, akurasiVal.toFixed(2) + '%', 'Akurasi Stock', toRiwayatAkurasi,
+      'Akurasi = (1 − Total Selisih Absolut ÷ Total Stock Sistem) × 100%. Dihitung dari seluruh SO berstatus Selesai sesuai filter yang aktif saat ini (Store/Tanggal/' + TIPE_SO_STATE.dashboard + ').',
+      TIPE_SO_STATE.dashboard) +
+    statCardFeatured(ICONS.clipboard, 'green-solid', formatNumber(d.soCount), 'SO Selesai', toRiwayatSoCount, null, null) +
     statCard(ICONS.hourglass, 'blue', formatNumber(d.menungguApprovalCount), 'Pending Approval', toRiwayatMenungguApproval) +
     statCard(ICONS.box, 'gray', formatNumber(d.totalItem), 'Total Item', toTotalItemModal) +
     statCard(ICONS.target, 'gray', formatNumber(d.itemSesuai), 'Item Sesuai', toItemSesuaiModal) +
@@ -2522,6 +2523,24 @@ function renderDashboardStatGrid(d, params) {
     statCard(ICONS.layers, 'gray', formatNumber(d.totalStockSistem), 'Total Stock Sistem', toStockSistemModal) +
     statCard(ICONS.check, 'gray', formatNumber(d.totalStockFisik), 'Total Stock Fisik', toStockFisikModal);
   fitStatCardValues(statGrid);
+}
+
+// Kartu KPI unggulan (2 kartu pertama di grid: Akurasi & SO Selesai) —
+// versi lebih besar/menonjol dari statCard biasa, dengan elemen visual
+// kecil (badge periode) di pojok kanan atas, ala dashboard analytics
+// modern. Perilaku klik/tooltip/onclick IDENTIK dengan statCard biasa —
+// ini murni perubahan tampilan, tidak ada logic baru.
+function statCardFeatured(icon, color, value, label, onclick, tooltip, periodBadge) {
+  const clickable = !!onclick;
+  return '<div class="stat-card-featured c-' + color + (clickable ? ' clickable' : '') + '"' + (clickable ? ' onclick="' + onclick + '"' : '') + '>' +
+    '<div class="stat-card-featured-top">' +
+      '<div class="stat-icon-featured">' + icon + '</div>' +
+      (periodBadge ? '<span class="stat-card-featured-badge">' + escapeHtml(periodBadge) + '</span>' : '') +
+      (tooltip ? '<div class="stat-card-info" title="' + escapeHtml(tooltip) + '" onclick="event.stopPropagation();">' + ICON_MODAL_ICONS.info + '</div>' : '') +
+    '</div>' +
+    '<div class="stat-value-featured">' + value + '</div>' +
+    '<div class="stat-label-featured">' + label + '</div>' +
+  '</div>';
 }
 
 const ITEM_DRILLDOWN_META = {
