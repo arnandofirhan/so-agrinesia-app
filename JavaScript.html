@@ -124,12 +124,12 @@ const TIPE_SO_META = {
 function getTipeSoMeta(tipe) { return TIPE_SO_META[tipe] || TIPE_SO_META.Mingguan; }
 
 let TIPE_SO_STATE = {
-  stockOpname: 'Mingguan', riwayat: 'Mingguan', dashboard: 'Mingguan',
-  laporan: 'Mingguan', auditSelisih: 'Mingguan', perbandinganPeriode: 'Mingguan'
+  stockOpname: 'Harian', riwayat: 'Harian', dashboard: 'Harian',
+  laporan: 'Harian', auditSelisih: 'Harian', perbandinganPeriode: 'Harian'
 };
 
 function tipeSoToggleHtml(pageKey) {
-  const active = TIPE_SO_STATE[pageKey] || 'Mingguan';
+  const active = TIPE_SO_STATE[pageKey] || 'Harian';
   const buttons = TIPE_SO_LIST.map(function(tipe) {
     return '<button type="button" class="tipe-so-toggle-btn' + (active === tipe ? ' active' : '') + '" data-tipe="' + tipe + '">' + tipe + '</button>';
   }).join('');
@@ -152,14 +152,14 @@ function bindTipeSoToggle(pageKey, onChange) {
 
 function prefetchOppositeTipeSo(pageKey, cachePrefix, serverFnName, buildParams) {
   if (!CURRENT_USER) return;
-  const currentTipe = TIPE_SO_STATE[pageKey] || 'Mingguan';
+  const currentTipe = TIPE_SO_STATE[pageKey] || 'Harian';
   // 3 tipe sekarang (Harian/Mingguan/Bulanan): prefetch KEDUA tipe lain di
   // background (bukan cuma 1 "opposite" seperti dulu waktu masih 2 tipe),
   // supaya pindah ke tipe manapun tetap terasa instan dari cache.
   const otherTipes = TIPE_SO_LIST.filter(function(t) { return t !== currentTipe; });
   otherTipes.forEach(function(oppositeTipe) {
     setTimeout(function() {
-      if ((TIPE_SO_STATE[pageKey] || 'Mingguan') !== currentTipe) return;
+      if ((TIPE_SO_STATE[pageKey] || 'Harian') !== currentTipe) return;
       const params = buildParams(oppositeTipe);
       const cacheKey = cachePrefix + ':' + JSON.stringify(params);
       if (peekCached(cacheKey)) return;
@@ -1717,7 +1717,7 @@ function goBackFromSoDetail() {
 }
 
 function goToRiwayat(sourcePageKey, params) {
-  TIPE_SO_STATE.riwayat = TIPE_SO_STATE[sourcePageKey] || 'Mingguan';
+  TIPE_SO_STATE.riwayat = TIPE_SO_STATE[sourcePageKey] || 'Harian';
   navigateTo('riwayat', params);
 }
 
@@ -2309,7 +2309,7 @@ async function renderDashboard() {
 async function loadRecentActivity(force) {
   const listEl = document.getElementById('dashRecentActivity');
   if (!listEl) return;
-  const tipeSo = TIPE_SO_STATE.dashboard || 'Mingguan';
+  const tipeSo = TIPE_SO_STATE.dashboard || 'Harian';
   const params = { currentUser: CURRENT_USER, statusFilter: 'selesai', tipeSo: tipeSo };
   const cacheKey = 'soList:' + JSON.stringify(params);
 
@@ -2343,7 +2343,7 @@ async function loadRecentActivity(force) {
 async function loadWeeklySoStatus(force) {
   const el = document.getElementById('weeklySoBanner');
   if (!el) return;
-  const tipeSo = TIPE_SO_STATE.dashboard || 'Mingguan';
+  const tipeSo = TIPE_SO_STATE.dashboard || 'Harian';
   const res = await getCached('weeklySoStatus:' + CURRENT_USER.username + ':' + tipeSo, function() {
     return callServer('getWeeklySoStatus', { currentUser: CURRENT_USER, tipeSo: tipeSo }, { silent: true });
   }, force);
@@ -2412,7 +2412,7 @@ function toggleWeeklySoChips(btn) {
 
 function prefetchOppositeWeeklySoStatus(tipeSo) {
   setTimeout(function() {
-    if ((TIPE_SO_STATE.dashboard || 'Mingguan') !== tipeSo) return;
+    if ((TIPE_SO_STATE.dashboard || 'Harian') !== tipeSo) return;
     const oppTipe = tipeSo === 'Bulanan' ? 'Mingguan' : 'Bulanan';
     const oppKey = 'weeklySoStatus:' + CURRENT_USER.username + ':' + oppTipe;
     if (peekCached(oppKey)) return;
@@ -2508,7 +2508,7 @@ function renderDashboardStatGrid(d, params) {
 
   statGrid.innerHTML =
     statCard(ICONS.percent, akurasiColor, akurasiVal.toFixed(2) + '%', 'Akurasi Stock', toRiwayatAkurasi, false,
-      'Akurasi = (1 − Total Selisih Absolut ÷ Total Stock Sistem) × 100%. Dihitung dari seluruh SO berstatus Selesai sesuai filter yang aktif saat ini (Store/Tanggal/' + (TIPE_SO_STATE.dashboard === 'Bulanan' ? 'Bulanan' : 'Mingguan') + ').') +
+      'Akurasi = (1 − Total Selisih Absolut ÷ Total Stock Sistem) × 100%. Dihitung dari seluruh SO berstatus Selesai sesuai filter yang aktif saat ini (Store/Tanggal/' + TIPE_SO_STATE.dashboard + ').') +
     statCard(ICONS.clipboard, 'green', formatNumber(d.soCount), 'SO Selesai', toRiwayatSoCount) +
     statCard(ICONS.hourglass, 'blue', formatNumber(d.menungguApprovalCount), 'Pending Approval', toRiwayatMenungguApproval) +
     statCard(ICONS.box, 'gray', formatNumber(d.totalItem), 'Total Item', toTotalItemModal) +
@@ -4428,7 +4428,7 @@ function openCreateSoModal() {
     storeField = '<div class="form-group"><label>Store</label><div class="field-icon-wrap">' + ICONS.store + '<input type="text" id="newSoStoreFixed" value="' + escapeHtml(onlyStore) + '" disabled></div></div>';
   }
 
-  const defaultTipe = TIPE_SO_STATE.stockOpname || 'Mingguan';
+  const defaultTipe = TIPE_SO_STATE.stockOpname || 'Harian';
   const tipeField = '<div class="form-group"><label>Tipe SO</label><div class="field-icon-wrap">' + ICONS.clock + '<select id="newSoTipe">' +
     '<option value="Harian"' + (defaultTipe === 'Harian' ? ' selected' : '') + '>SO Harian</option>' +
     '<option value="Mingguan"' + (defaultTipe === 'Mingguan' ? ' selected' : '') + '>SO Mingguan</option>' +
