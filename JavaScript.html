@@ -113,6 +113,16 @@ window.addEventListener('popstate', function(evt) {
   }
 });
 
+// Urutan tipe SO yang berlaku di SELURUH aplikasi (dipakai toggle, label,
+// prefetch, dsb). Tambah tipe baru di masa depan cukup di array ini saja.
+const TIPE_SO_LIST = ['Harian', 'Mingguan', 'Bulanan'];
+const TIPE_SO_META = {
+  Harian:   { label: 'HARIAN', badgeClass: 'badge-teal', badgeHex: '0F766E', fileTag: 'harian', periodLabel: 'hari ini', sincePhrase: 'sejak hari ini' },
+  Mingguan: { label: 'MINGGUAN', badgeClass: 'badge-blue', badgeHex: '2E86C1', fileTag: 'mingguan', periodLabel: 'minggu ini', sincePhrase: 'sejak Senin' },
+  Bulanan:  { label: 'BULANAN', badgeClass: 'badge-purple', badgeHex: '8E44AD', fileTag: 'bulanan', periodLabel: 'bulan ini', sincePhrase: 'sejak tanggal 1 bulan ini' }
+};
+function getTipeSoMeta(tipe) { return TIPE_SO_META[tipe] || TIPE_SO_META.Mingguan; }
+
 let TIPE_SO_STATE = {
   stockOpname: 'Mingguan', riwayat: 'Mingguan', dashboard: 'Mingguan',
   laporan: 'Mingguan', auditSelisih: 'Mingguan', perbandinganPeriode: 'Mingguan'
@@ -120,10 +130,10 @@ let TIPE_SO_STATE = {
 
 function tipeSoToggleHtml(pageKey) {
   const active = TIPE_SO_STATE[pageKey] || 'Mingguan';
-  return '<div class="tipe-so-toggle" id="tipeSoToggle_' + pageKey + '">' +
-    '<button type="button" class="tipe-so-toggle-btn' + (active === 'Mingguan' ? ' active' : '') + '" data-tipe="Mingguan">Mingguan</button>' +
-    '<button type="button" class="tipe-so-toggle-btn' + (active === 'Bulanan' ? ' active' : '') + '" data-tipe="Bulanan">Bulanan</button>' +
-  '</div>';
+  const buttons = TIPE_SO_LIST.map(function(tipe) {
+    return '<button type="button" class="tipe-so-toggle-btn' + (active === tipe ? ' active' : '') + '" data-tipe="' + tipe + '">' + tipe + '</button>';
+  }).join('');
+  return '<div class="tipe-so-toggle" id="tipeSoToggle_' + pageKey + '">' + buttons + '</div>';
 }
 
 function bindTipeSoToggle(pageKey, onChange) {
@@ -143,22 +153,27 @@ function bindTipeSoToggle(pageKey, onChange) {
 function prefetchOppositeTipeSo(pageKey, cachePrefix, serverFnName, buildParams) {
   if (!CURRENT_USER) return;
   const currentTipe = TIPE_SO_STATE[pageKey] || 'Mingguan';
-  const oppositeTipe = currentTipe === 'Bulanan' ? 'Mingguan' : 'Bulanan';
-  setTimeout(function() {
-    if ((TIPE_SO_STATE[pageKey] || 'Mingguan') !== currentTipe) return;
-    const params = buildParams(oppositeTipe);
-    const cacheKey = cachePrefix + ':' + JSON.stringify(params);
-    if (peekCached(cacheKey)) return; 
-    getCached(cacheKey, function() {
-      return callServer(serverFnName, params, { silent: true });
-    }).catch(function() {
-    });
-  }, 150);
+  // 3 tipe sekarang (Harian/Mingguan/Bulanan): prefetch KEDUA tipe lain di
+  // background (bukan cuma 1 "opposite" seperti dulu waktu masih 2 tipe),
+  // supaya pindah ke tipe manapun tetap terasa instan dari cache.
+  const otherTipes = TIPE_SO_LIST.filter(function(t) { return t !== currentTipe; });
+  otherTipes.forEach(function(oppositeTipe) {
+    setTimeout(function() {
+      if ((TIPE_SO_STATE[pageKey] || 'Mingguan') !== currentTipe) return;
+      const params = buildParams(oppositeTipe);
+      const cacheKey = cachePrefix + ':' + JSON.stringify(params);
+      if (peekCached(cacheKey)) return;
+      getCached(cacheKey, function() {
+        return callServer(serverFnName, params, { silent: true });
+      }).catch(function() {
+      });
+    }, 150);
+  });
 }
 
 function prefetchBothTipeSoNow(pageKey, cachePrefix, serverFnName, buildParams) {
   if (!CURRENT_USER) return Promise.resolve();
-  const tipes = ['Mingguan', 'Bulanan'];
+  const tipes = TIPE_SO_LIST;
   return Promise.all(tipes.map(function(tipe) {
     const params = buildParams(tipe);
     const cacheKey = cachePrefix + ':' + JSON.stringify(params);
@@ -2337,9 +2352,9 @@ async function loadWeeklySoStatus(force) {
   if (!d.stores.length) { el.innerHTML = ''; return; }
 
   const isSingleStore = !hasAllStoreAccess() && d.stores.length === 1;
-  const isBulanan = d.tipeSo === 'Bulanan';
-  const periodLabel = isBulanan ? 'bulan ini' : 'minggu ini';
-  const sincePhrase = isBulanan ? 'sejak tanggal 1 bulan ini' : 'sejak Senin';
+  const metaDash = getTipeSoMeta(d.tipeSo);
+  const periodLabel = metaDash.periodLabel;
+  const sincePhrase = metaDash.sincePhrase;
 
   if (d.belumCount === 0) {
     el.innerHTML =
@@ -2623,8 +2638,8 @@ function statusBadge(status, isRejected) {
 }
 
 function tipeSoBadge(tipeSo) {
-  const isBulanan = tipeSo === 'Bulanan';
-  return '<span class="badge ' + (isBulanan ? 'badge-purple' : 'badge-blue') + '">' + (isBulanan ? 'Bulanan' : 'Mingguan') + '</span>';
+  const metaBadge = getTipeSoMeta(tipeSo);
+  return '<span class="badge ' + metaBadge.badgeClass + '">' + (tipeSo === 'Harian' ? 'Harian' : (tipeSo === 'Bulanan' ? 'Bulanan' : 'Mingguan')) + '</span>';
 }
 
 function selisihBadge(selisih) {
@@ -2657,8 +2672,8 @@ async function loadTrenData(force) {
   const d = res.data;
 
   const trenTitleEl = document.getElementById('trenMonthlyChartTitle');
-  if (trenTitleEl) trenTitleEl.textContent = d.isBulananTrend ? 'Tren Selisih per Bulan' : 'Tren Selisih per Minggu';
-  LAST_TREN_IS_BULANAN = !!d.isBulananTrend;
+  if (trenTitleEl) trenTitleEl.textContent = d.isBulananTrend ? 'Tren Selisih per Bulan' : (d.isHarianTrend ? 'Tren Selisih per Hari' : 'Tren Selisih per Minggu');
+  LAST_TREN_MODE = d.isBulananTrend ? 'Bulanan' : (d.isHarianTrend ? 'Harian' : 'Mingguan');
 
   try { renderWeeklyTrendChart(d.weeklyTrend); }
   catch (err) {
@@ -2685,7 +2700,7 @@ let monthlyChartInstance = null;
 let storeChartInstance = null;
 let LAST_WEEKLY_TREND_ROWS = null;
 let LAST_STORE_COMPARISON_ROWS = null;
-let LAST_TREN_IS_BULANAN = false;
+let LAST_TREN_MODE = 'Mingguan';
 
 function weekKeyToDateRange(row) {
   return { start: row.weekStart, end: row.weekEnd };
@@ -2713,7 +2728,7 @@ function renderWeeklyTrendChart(rows) {
     return;
   }
   if (!rows || !rows.length) {
-    const periodWord = LAST_TREN_IS_BULANAN ? 'Bulanan' : 'Mingguan';
+    const periodWord = LAST_TREN_MODE;
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">' + ICONS.trendUp + '</div><div class="empty-title">Belum ada data</div><div class="empty-desc">Grafik akan muncul setelah ada SO ' + periodWord + ' berstatus Selesai.</div></div>';
     return;
   }
@@ -4011,11 +4026,41 @@ function exportSpecAsExcel(spec) {
     };
   });
 
+  // FORMULA EXCEL (bukan angka statis): kalau spec ini punya semua kolom
+  // sumber yang dibutuhkan (sistem, fisikDepan, fisikGudang, total, harga,
+  // selisihQty, selisihValue, valueSistem, valueFisik — persis kolom
+  // Detail SO), kolom turunannya ditulis sebagai rumus supaya kalau angka
+  // sumbernya diubah manual di Excel, hasilnya ikut ter-update otomatis.
+  // Pola sama seperti yang sudah dipakai di Export Form SO.
+  const colIdxMap = {};
+  cols.forEach(function(c, ci) { colIdxMap[c.key] = ci; });
+  const FORMULA_SRC_KEYS = ['sistem', 'fisikDepan', 'fisikGudang', 'total', 'harga', 'selisihQty', 'selisihValue', 'valueSistem', 'valueFisik'];
+  const hasFormulaCols = FORMULA_SRC_KEYS.every(function(k) { return colIdxMap[k] !== undefined; });
+  const colLetter = {};
+  if (hasFormulaCols) {
+    FORMULA_SRC_KEYS.forEach(function(k) { colLetter[k] = XLSX.utils.encode_col(colIdxMap[k]); });
+  }
+  let catStartRow = null, catEndRow = null;
+  const allCatRanges = [];
+
   spec.rows.forEach(function(row, ri) {
     const excelRowIndex = headerRowIndex + 1 + ri; 
+    const excelRowNum = excelRowIndex + 1; // 1-indexed, dipakai di alamat rumus
     const rowType = spec.rowTypeKey ? row[spec.rowTypeKey] : null;
     const isSubtotal = rowType === 'subtotal';
     const isGrandtotal = rowType === 'grandtotal';
+    const isDataRow = !isSubtotal && !isGrandtotal;
+
+    if (hasFormulaCols) {
+      if (isDataRow) {
+        if (catStartRow === null) catStartRow = excelRowNum;
+        catEndRow = excelRowNum;
+      } else if (isSubtotal) {
+        if (catStartRow !== null) allCatRanges.push([catStartRow, catEndRow]);
+        catStartRow = null;
+        catEndRow = null;
+      }
+    }
 
     cols.forEach(function(c, ci) {
       const addr = XLSX.utils.encode_cell({ r: excelRowIndex, c: ci });
@@ -4028,7 +4073,37 @@ function exportSpecAsExcel(spec) {
         border: THIN_BORDER
       };
 
-      if (isNumCol) {
+      const fallbackNum = (typeof v === 'number') ? v : 0;
+      const rangeFormula = function(colKey) {
+        if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1] || [excelRowNum, excelRowNum];
+          return 'SUM(' + colLetter[colKey] + r[0] + ':' + colLetter[colKey] + r[1] + ')';
+        }
+        const ranges = allCatRanges.map(function(r) { return colLetter[colKey] + r[0] + ':' + colLetter[colKey] + r[1]; }).join(',');
+        return 'SUM(' + (ranges || (colLetter[colKey] + excelRowNum)) + ')';
+      };
+
+      if (hasFormulaCols && c.key === 'total') {
+        if (isDataRow) ws[addr] = { t: 'n', f: colLetter.fisikDepan + excelRowNum + '+' + colLetter.fisikGudang + excelRowNum, v: fallbackNum };
+        else ws[addr] = { t: 'n', f: rangeFormula('total'), v: fallbackNum };
+        cellStyle.numFmt = '#,##0';
+      } else if (hasFormulaCols && c.key === 'selisihQty') {
+        if (isDataRow) ws[addr] = { t: 'n', f: colLetter.total + excelRowNum + '-' + colLetter.sistem + excelRowNum, v: fallbackNum };
+        else ws[addr] = { t: 'n', f: rangeFormula('selisihQty'), v: fallbackNum };
+        cellStyle.numFmt = '#,##0';
+      } else if (hasFormulaCols && c.key === 'selisihValue') {
+        if (isDataRow) ws[addr] = { t: 'n', f: colLetter.selisihQty + excelRowNum + '*' + colLetter.harga + excelRowNum, v: fallbackNum };
+        else ws[addr] = { t: 'n', f: rangeFormula('selisihValue'), v: fallbackNum };
+        cellStyle.numFmt = '#,##0';
+      } else if (hasFormulaCols && c.key === 'valueSistem') {
+        if (isDataRow) ws[addr] = { t: 'n', f: colLetter.sistem + excelRowNum + '*' + colLetter.harga + excelRowNum, v: fallbackNum };
+        else ws[addr] = { t: 'n', f: rangeFormula('valueSistem'), v: fallbackNum };
+        cellStyle.numFmt = '#,##0';
+      } else if (hasFormulaCols && c.key === 'valueFisik') {
+        if (isDataRow) ws[addr] = { t: 'n', f: colLetter.total + excelRowNum + '*' + colLetter.harga + excelRowNum, v: fallbackNum };
+        else ws[addr] = { t: 'n', f: rangeFormula('valueFisik'), v: fallbackNum };
+        cellStyle.numFmt = '#,##0';
+      } else if (isNumCol) {
         const n = typeof v === 'number' ? v : parseFloat(v);
         if (v === '' || v === null || v === undefined) {
           if (!ws[addr]) ws[addr] = { t: 's', v: '' };
@@ -4355,6 +4430,7 @@ function openCreateSoModal() {
 
   const defaultTipe = TIPE_SO_STATE.stockOpname || 'Mingguan';
   const tipeField = '<div class="form-group"><label>Tipe SO</label><div class="field-icon-wrap">' + ICONS.clock + '<select id="newSoTipe">' +
+    '<option value="Harian"' + (defaultTipe === 'Harian' ? ' selected' : '') + '>SO Harian</option>' +
     '<option value="Mingguan"' + (defaultTipe === 'Mingguan' ? ' selected' : '') + '>SO Mingguan</option>' +
     '<option value="Bulanan"' + (defaultTipe === 'Bulanan' ? ' selected' : '') + '>SO Bulanan</option>' +
     '</select></div></div>';
@@ -5007,9 +5083,9 @@ function buildSoExportSpec(so) {
     valueSistem: grandValueSistem, valueFisik: grandValueFisik, catatan: ''
   });
 
-  const isBulananSo = so.tipeSo === 'Bulanan';
-  const badgeTextSo = isBulananSo ? 'SO BULANAN' : 'SO MINGGUAN';
-  const badgeColorSo = isBulananSo ? '8E44AD' : '2E86C1';
+  const metaSoExport = getTipeSoMeta(so.tipeSo);
+  const badgeTextSo = 'SO ' + metaSoExport.label;
+  const badgeColorSo = metaSoExport.badgeHex;
 
   const approvalInfoSo = so.approvalNote ?
     (function() {
@@ -5021,7 +5097,7 @@ function buildSoExportSpec(so) {
     : '';
 
   return {
-    filenameBase: (isBulananSo ? 'SO_BULANAN_' : 'SO_MINGGUAN_') + so.soId,
+    filenameBase: ('SO_' + metaSoExport.fileTag.toUpperCase() + '_') + so.soId,
     title: 'Stock Opname: ' + so.soId,
     subtitle: 'Store: ' + so.store + '  |  Tanggal: ' + formatDateDisplay(so.tanggal) + '  |  Status: ' + so.status,
     approvalInfo: approvalInfoSo,
@@ -6774,13 +6850,13 @@ async function renderRiwayat(params) {
   );
   bindExportWidget('riwExportWidget', function() {
     if (!RIWAYAT_CACHE.length) return null;
-    const isBulananRiw = TIPE_SO_STATE.riwayat === 'Bulanan';
+    const metaRiw = getTipeSoMeta(TIPE_SO_STATE.riwayat);
     return {
-      filenameBase: isBulananRiw ? 'riwayat_so_bulanan' : 'riwayat_so_mingguan',
+      filenameBase: 'riwayat_so_' + metaRiw.fileTag,
       title: 'Riwayat Stock Opname',
       subtitle: 'Total ' + RIWAYAT_CACHE.length + ' SO — data sesuai filter yang sedang diterapkan',
-      badgeText: isBulananRiw ? 'RIWAYAT BULANAN' : 'RIWAYAT MINGGUAN',
-      badgeColor: isBulananRiw ? '8E44AD' : '2E86C1',
+      badgeText: 'RIWAYAT ' + metaRiw.label,
+      badgeColor: metaRiw.badgeHex,
       sheetName: 'Riwayat SO',
       numberCols: ['itemPlusCount', 'itemMinusCount', 'totalSelisihQty', 'totalSelisihValue'],
       displayFormatCols: { totalSelisihValue: 'rupiah' },
@@ -7290,14 +7366,14 @@ async function renderLaporan() {
     const d = LAPORAN_CACHE;
     if (!d || !d.rows.length) return null;
     const p = getLaporanParams();
-    const isBulananLap = p.tipeSo === 'Bulanan';
+    const metaLapExp = getTipeSoMeta(p.tipeSo);
     return {
-      filenameBase: (isBulananLap ? 'laporan_so_bulanan' : 'laporan_so_mingguan'),
+      filenameBase: 'laporan_so_' + metaLapExp.fileTag,
       title: 'Laporan Stock Opname',
       subtitle: 'Periode: ' + formatDateDisplay(p.tanggalMulai) + ' s/d ' + formatDateDisplay(p.tanggalAkhir) + (p.store ? '  |  Store: ' + p.store : '  |  Semua Store') +
         '  |  Total Selisih Value: ' + formatRupiah(d.grandTotal.selisihValue),
-      badgeText: isBulananLap ? 'LAPORAN BULANAN' : 'LAPORAN MINGGUAN',
-      badgeColor: isBulananLap ? '8E44AD' : '2E86C1',
+      badgeText: 'LAPORAN ' + metaLapExp.label,
+      badgeColor: metaLapExp.badgeHex,
       sheetName: 'Laporan',
       numberCols: ['itemCount', 'selisihQty', 'selisihValue'],
       displayFormatCols: { selisihValue: 'rupiah' },
@@ -7500,13 +7576,13 @@ async function renderAuditSelisih() {
     const d = AUDIT_SELISIH_CACHE;
     if (!d || !d.rows.length) return null;
     const rangeText = formatDateDisplay(document.getElementById('auditTanggalMulai').value) + ' s/d ' + formatDateDisplay(document.getElementById('auditTanggalAkhir').value);
-    const isBulananAudit = TIPE_SO_STATE.auditSelisih === 'Bulanan';
+    const metaAudit = getTipeSoMeta(TIPE_SO_STATE.auditSelisih);
     return {
-      filenameBase: isBulananAudit ? 'audit_selisih_bulanan' : 'audit_selisih_mingguan',
+      filenameBase: 'audit_selisih_' + metaAudit.fileTag,
       title: 'Audit Selisih Berulang',
       subtitle: 'Periode: ' + rangeText + ' — Min. Berulang: ' + document.getElementById('auditMinOccurrence').value + 'x',
-      badgeText: isBulananAudit ? 'AUDIT BULANAN' : 'AUDIT MINGGUAN',
-      badgeColor: isBulananAudit ? '8E44AD' : '2E86C1',
+      badgeText: 'AUDIT ' + metaAudit.label,
+      badgeColor: metaAudit.badgeHex,
       sheetName: 'Audit Selisih',
       numberCols: ['totalQty', 'totalValue'],
       displayFormatCols: { totalValue: 'rupiah' },
@@ -7729,11 +7805,21 @@ async function renderPerbandinganPeriode() {
   const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  // Rentang default Periode 1 (lalu) & Periode 2 (sekarang) per tipe SO:
+  // Harian = kemarin vs hari ini, Mingguan = minggu lalu vs minggu ini,
+  // Bulanan = bulan lalu vs bulan ini.
+  function banPeriodDatesFor(tipe) {
+    if (tipe === 'Bulanan') return { p1s: lastMonthStart, p1e: lastMonthEnd, p2s: thisMonthStart, p2e: today };
+    if (tipe === 'Harian') return { p1s: yesterday, p1e: yesterday, p2s: today, p2e: today };
+    return { p1s: lastMonday, p1e: lastSunday, p2s: thisMonday, p2e: today };
+  }
+  const banDefaultDates = banPeriodDatesFor(TIPE_SO_STATE.perbandinganPeriode);
   const isBulananDefault = (TIPE_SO_STATE.perbandinganPeriode === 'Bulanan');
 
   content.innerHTML =
     '<div class="page-header">' +
-      '<div><h2>Perbandingan Antar Periode</h2><div class="page-subtitle" id="banSubtitle">' + banSubtitleText(isBulananDefault) + '</div></div>' +
+      '<div><h2>Perbandingan Antar Periode</h2><div class="page-subtitle" id="banSubtitle">' + banSubtitleText(TIPE_SO_STATE.perbandinganPeriode) + '</div></div>' +
       '<div class="page-header-actions">' + tipeSoToggleHtml('perbandinganPeriode') + exportWidgetHtml('banExportWidget') + '</div>' +
     '</div>' +
     '<div class="filter-bar">' +
@@ -7746,23 +7832,23 @@ async function renderPerbandinganPeriode() {
         '<div class="filter-date-range">' +
           '<div class="filter-field">' +
             '<span class="filter-field-label">' + ICONS.clock + '<span>Periode 1 - Mulai</span></span>' +
-            '<input type="date" id="banP1Mulai" value="' + toDateInput(isBulananDefault ? lastMonthStart : lastMonday) + '">' +
+            '<input type="date" id="banP1Mulai" value="' + toDateInput(banDefaultDates.p1s) + '">' +
           '</div>' +
           '<span class="filter-date-sep">–</span>' +
           '<div class="filter-field">' +
             '<span class="filter-field-label">' + ICONS.clock + '<span>Periode 1 - Akhir</span></span>' +
-            '<input type="date" id="banP1Akhir" value="' + toDateInput(isBulananDefault ? lastMonthEnd : lastSunday) + '">' +
+            '<input type="date" id="banP1Akhir" value="' + toDateInput(banDefaultDates.p1e) + '">' +
           '</div>' +
         '</div>' +
         '<div class="filter-date-range">' +
           '<div class="filter-field">' +
             '<span class="filter-field-label">' + ICONS.clock + '<span>Periode 2 - Mulai</span></span>' +
-            '<input type="date" id="banP2Mulai" value="' + toDateInput(isBulananDefault ? thisMonthStart : thisMonday) + '">' +
+            '<input type="date" id="banP2Mulai" value="' + toDateInput(banDefaultDates.p2s) + '">' +
           '</div>' +
           '<span class="filter-date-sep">–</span>' +
           '<div class="filter-field">' +
             '<span class="filter-field-label">' + ICONS.clock + '<span>Periode 2 - Akhir</span></span>' +
-            '<input type="date" id="banP2Akhir" value="' + toDateInput(today) + '">' +
+            '<input type="date" id="banP2Akhir" value="' + toDateInput(banDefaultDates.p2e) + '">' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -7793,11 +7879,11 @@ async function renderPerbandinganPeriode() {
     loadPerbandinganPeriodeData,
     function() {
       if (document.getElementById('banStoreFilter')) document.getElementById('banStoreFilter').value = '';
-      const resetToBulanan = (TIPE_SO_STATE.perbandinganPeriode === 'Bulanan');
-      document.getElementById('banP1Mulai').value = toDateInput(resetToBulanan ? lastMonthStart : lastMonday);
-      document.getElementById('banP1Akhir').value = toDateInput(resetToBulanan ? lastMonthEnd : lastSunday);
-      document.getElementById('banP2Mulai').value = toDateInput(resetToBulanan ? thisMonthStart : thisMonday);
-      document.getElementById('banP2Akhir').value = toDateInput(today);
+      const resetDates = banPeriodDatesFor(TIPE_SO_STATE.perbandinganPeriode);
+      document.getElementById('banP1Mulai').value = toDateInput(resetDates.p1s);
+      document.getElementById('banP1Akhir').value = toDateInput(resetDates.p1e);
+      document.getElementById('banP2Mulai').value = toDateInput(resetDates.p2s);
+      document.getElementById('banP2Akhir').value = toDateInput(resetDates.p2e);
       loadPerbandinganPeriodeData(true);
     }
   );
@@ -7805,13 +7891,13 @@ async function renderPerbandinganPeriode() {
   bindExportWidget('banExportWidget', function() {
     const d = PERBANDINGAN_PERIODE_CACHE;
     if (!d || !d.perStoreComparison.length) return null;
-    const isBulananBan = TIPE_SO_STATE.perbandinganPeriode === 'Bulanan';
+    const metaBanExp = getTipeSoMeta(TIPE_SO_STATE.perbandinganPeriode);
     return {
-      filenameBase: isBulananBan ? 'perbandingan_periode_bulanan' : 'perbandingan_periode_mingguan',
+      filenameBase: 'perbandingan_periode_' + metaBanExp.fileTag,
       title: 'Perbandingan Antar Periode',
       subtitle: 'Periode 1: ' + formatDateDisplay(d.periode1.start) + ' s/d ' + formatDateDisplay(d.periode1.end) + '  |  Periode 2: ' + formatDateDisplay(d.periode2.start) + ' s/d ' + formatDateDisplay(d.periode2.end),
-      badgeText: isBulananBan ? 'BANDING BULANAN' : 'BANDING MINGGUAN',
-      badgeColor: isBulananBan ? '8E44AD' : '2E86C1',
+      badgeText: 'BANDING ' + metaBanExp.label,
+      badgeColor: metaBanExp.badgeHex,
       sheetName: 'Banding Periode',
       numberCols: ['selisihP1', 'selisihP2', 'perubahan'],
       displayFormatCols: { selisihP1: 'rupiah', selisihP2: 'rupiah', perubahan: 'rupiah' },
@@ -7834,21 +7920,20 @@ async function renderPerbandinganPeriode() {
 
   loadPerbandinganPeriodeData();
   bindTipeSoToggle('perbandinganPeriode', function(tipe) {
-    const isBulanan = (tipe === 'Bulanan');
-    document.getElementById('banP1Mulai').value = toDateInput(isBulanan ? lastMonthStart : lastMonday);
-    document.getElementById('banP1Akhir').value = toDateInput(isBulanan ? lastMonthEnd : lastSunday);
-    document.getElementById('banP2Mulai').value = toDateInput(isBulanan ? thisMonthStart : thisMonday);
-    document.getElementById('banP2Akhir').value = toDateInput(today);
+    const dates = banPeriodDatesFor(tipe);
+    document.getElementById('banP1Mulai').value = toDateInput(dates.p1s);
+    document.getElementById('banP1Akhir').value = toDateInput(dates.p1e);
+    document.getElementById('banP2Mulai').value = toDateInput(dates.p2s);
+    document.getElementById('banP2Akhir').value = toDateInput(dates.p2e);
     const subEl = document.getElementById('banSubtitle');
-    if (subEl) subEl.innerHTML = banSubtitleText(isBulanan);
+    if (subEl) subEl.innerHTML = banSubtitleText(tipe);
     loadPerbandinganPeriodeData();
   });
 }
 
-function banSubtitleText(isBulanan) {
-  return 'Bandingkan total selisih SO antara dua rentang tanggal (mis. ' +
-    (isBulanan ? 'bulan ini vs bulan lalu' : 'minggu ini vs minggu lalu') +
-    ') untuk melihat tren naik/turun.';
+function banSubtitleText(tipe) {
+  const periodPhrase = tipe === 'Bulanan' ? 'bulan ini vs bulan lalu' : (tipe === 'Harian' ? 'hari ini vs kemarin' : 'minggu ini vs minggu lalu');
+  return 'Bandingkan total selisih SO antara dua rentang tanggal (mis. ' + periodPhrase + ') untuk melihat tren naik/turun.';
 }
 
 let PERBANDINGAN_PERIODE_CACHE = null;
