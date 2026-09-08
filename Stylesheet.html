@@ -160,6 +160,7 @@
 
   html[data-theme="dark"] .card,
   html[data-theme="dark"] .stat-card,
+  html[data-theme="dark"] .stat-card-featured.c-green,
   html[data-theme="dark"] .filter-bar,
   html[data-theme="dark"] .table-wrapper,
   html[data-theme="dark"] .chart-card {
@@ -1254,11 +1255,110 @@
 
   .stat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     grid-auto-rows: 1fr;
-    gap: 16px;
+    gap: 14px;
     margin-bottom: 26px;
   }
+  @media (max-width: 1100px) {
+    .stat-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Kartu KPI unggulan (Akurasi Stock & SO Selesai) — versi lebih besar
+     dan menonjol dari .stat-card biasa, ditaruh sebagai 2 kartu pertama
+     di dalam .stat-grid yang sama (grid layout-nya otomatis menyesuaikan,
+     tidak perlu struktur HTML terpisah). */
+  .stat-card-featured {
+    grid-column: span 2;
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 108px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform .15s var(--ease), box-shadow .15s var(--ease);
+  }
+  .stat-card-featured.clickable { cursor: pointer; }
+  .stat-card-featured.clickable:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  @media (max-width: 640px) { .stat-card-featured { grid-column: span 2; } }
+  @media (max-width: 480px) { .stat-card-featured { grid-column: span 2; min-height: 92px; padding: 14px 15px; } }
+
+  .stat-card-featured.c-green {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+  }
+  .stat-card-featured.c-green-solid {
+    background: var(--primary-dark);
+    border: none;
+  }
+  .stat-card-featured.c-green-solid::after {
+    content: '';
+    position: absolute; top: -34px; right: -34px;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    pointer-events: none;
+  }
+
+  .stat-card-featured-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .stat-icon-featured {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .stat-icon-featured svg { width: 18px; height: 18px; }
+  .stat-card-featured.c-green .stat-icon-featured { background: var(--primary-light); color: var(--primary-text); }
+  .stat-card-featured.c-green-solid .stat-icon-featured { background: rgba(255,255,255,0.16); color: #fff; }
+
+  .stat-card-featured-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    padding: 3px 9px;
+    border-radius: 20px;
+  }
+  .stat-card-featured.c-green .stat-card-featured-badge { background: var(--gray-100); color: var(--gray-600); }
+  .stat-card-featured.c-green-solid .stat-card-featured-badge { background: rgba(255,255,255,0.16); color: rgba(255,255,255,0.9); }
+
+  .stat-value-featured {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .stat-card-featured.c-green .stat-value-featured { color: var(--gray-900); }
+  .stat-card-featured.c-green-solid .stat-value-featured { color: #fff; }
+
+  .stat-label-featured {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .stat-card-featured.c-green .stat-label-featured { color: var(--gray-500); }
+  .stat-card-featured.c-green-solid .stat-label-featured { color: rgba(255,255,255,0.75); }
+
+  .stat-card-featured .stat-card-info {
+    position: static;
+    width: 18px; height: 18px;
+    background: var(--gray-100);
+    color: var(--gray-500);
+    opacity: 1;
+  }
+  .stat-card-featured.c-green-solid .stat-card-info { background: rgba(255,255,255,0.16); color: #fff; }
 
   .stat-card {
     background: var(--white);
