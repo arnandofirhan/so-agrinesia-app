@@ -3417,8 +3417,9 @@ function wireKategoriSelectNewOption(selectId) {
   });
 }
 
-function openAddItemModal(prefill) {
+async function openAddItemModal(prefill) {
   prefill = prefill || {};
+  await getCategoryListCached();
   openModal(
     modalHeaderHtml({ icon: ICONS.plus, color: 'primary', title: 'Tambah Item', subtitle: 'Tambahkan item baru ke Item Master' }) +
     '<div class="modal-body">' +
