@@ -137,6 +137,16 @@ function tipeSoToggleHtml(pageKey) {
   return '<div class="tipe-so-toggle" id="tipeSoToggle_' + pageKey + '">' + buttons + '</div>';
 }
 
+// Token per-halaman yang di-increment SETIAP KALI toggle Harian/Mingguan/
+// Bulanan diklik. Dipakai semua fungsi loadXxxData(force) di bawah untuk
+// membatalkan (discard) hasil request yang datang TELAT — jaringan tidak
+// menjamin urutan respons sesuai urutan klik, jadi klik Bulanan lalu
+// Mingguan cepat-cepat TIDAK MENJAMIN hasil Mingguan (klik terakhir)
+// datang belakangan. Tanpa guard ini, hasil yang telat (mis. Bulanan) bisa
+// menimpa tampilan yang sudah benar (Mingguan) — persis gejala "udah
+// pindah tab tapi datanya masih yang lama".
+const TIPE_SO_LOAD_TOKEN = { dashboard: 0, stockOpname: 0, riwayat: 0, laporan: 0, auditSelisih: 0, perbandinganPeriode: 0 };
+
 function bindTipeSoToggle(pageKey, onChange) {
   const el = document.getElementById('tipeSoToggle_' + pageKey);
   if (!el) return;
@@ -145,6 +155,7 @@ function bindTipeSoToggle(pageKey, onChange) {
       const tipe = btn.getAttribute('data-tipe');
       if (TIPE_SO_STATE[pageKey] === tipe) return;
       TIPE_SO_STATE[pageKey] = tipe;
+      if (TIPE_SO_LOAD_TOKEN[pageKey] !== undefined) TIPE_SO_LOAD_TOKEN[pageKey]++;
       el.querySelectorAll('.tipe-so-toggle-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
       onChange(tipe);
     });
@@ -2347,10 +2358,13 @@ async function loadRecentActivity(force) {
 async function loadWeeklySoStatus(force) {
   const el = document.getElementById('weeklySoBanner');
   if (!el) return;
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.dashboard;
   const tipeSo = TIPE_SO_STATE.dashboard || 'Harian';
   const res = await getCached('weeklySoStatus:' + CURRENT_USER.username + ':' + tipeSo, function() {
     return callServer('getWeeklySoStatus', { currentUser: CURRENT_USER, tipeSo: tipeSo }, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.dashboard) return;
   if (!res.success) { el.innerHTML = ''; return; }
   const d = res.data;
   if (!d.stores.length) { el.innerHTML = ''; return; }
@@ -2427,6 +2441,7 @@ function prefetchOppositeWeeklySoStatus(tipeSo) {
 }
 
 async function loadDashboardData(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.dashboard;
   const params = { currentUser: CURRENT_USER, tipeSo: TIPE_SO_STATE.dashboard };
   if (needsStorePicker()) {
     params.store = document.getElementById('dashStoreFilter') ? document.getElementById('dashStoreFilter').value : '';
@@ -2451,6 +2466,8 @@ async function loadDashboardData(force) {
   const res = await getCached(cacheKey, function() {
     return callServer('getDashboardData', params, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.dashboard) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
   renderDashboardStatGrid(res.data, params);
 }
@@ -2666,6 +2683,7 @@ function selisihColorClass_(selisih) {
 }
 
 async function loadTrenData(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.dashboard;
   const params = { currentUser: CURRENT_USER, tipeSo: TIPE_SO_STATE.dashboard };
   if (needsStorePicker()) {
     params.store = document.getElementById('dashStoreFilter') ? document.getElementById('dashStoreFilter').value : '';
@@ -2684,6 +2702,8 @@ async function loadTrenData(force) {
   const res = await getCached(cacheKey, function() {
     return callServer('getTrendData', params, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.dashboard) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
   const d = res.data;
 
@@ -4399,6 +4419,7 @@ function renderSoTableRows(data) {
 }
 
 async function loadSoTable(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.stockOpname;
   const params = { currentUser: CURRENT_USER, statusFilter: 'active', tipeSo: TIPE_SO_STATE.stockOpname };
   params.search = document.getElementById('soSearchInput') ? document.getElementById('soSearchInput').value : '';
   if (needsStorePicker() && document.getElementById('soStoreFilter')) {
@@ -4412,6 +4433,7 @@ async function loadSoTable(force) {
     renderSoTableRows(cachedRes.data);
   } else {
     skeletonTimer = setTimeout(function() {
+      if (myLoadToken !== TIPE_SO_LOAD_TOKEN.stockOpname) return;
       const tbody = document.getElementById('soTableBody');
       if (tbody) tbody.innerHTML = skeletonSoListCardsHtml(4);
     }, 150);
@@ -4430,6 +4452,9 @@ async function loadSoTable(force) {
     return callServer('getSoListForStore', params, { silent: true });
   }, force);
   clearTimeout(skeletonTimer);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle: batalkan hasil
+  // yang sudah basi (user sudah klik toggle lain sebelum ini selesai).
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.stockOpname) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
 
   renderSoTableRows(res.data);
@@ -4536,14 +4561,18 @@ async function renderSoDetail(soId) {
   // sebenarnya request sudah lama selesai (atau gagal diam-diam). Dicek
   // langsung dari DOM (bukan dari state promise), supaya independen dari
   // jalur mana pun yang mungkin gagal. myOpenToken dicek supaya tidak
-  // mengganggu kalau user sudah pindah ke SO/halaman lain sebelum 18 detik.
+  // mengganggu kalau user sudah pindah ke SO/halaman lain. Angka 20 detik
+  // sengaja sedikit di atas skenario terburuk jalur fallback normal
+  // (~18.9 detik: 9 detik uiTimeout + 900ms delay + 9 detik retry) supaya
+  // watchdog ini betul-betul cuma jaring pengaman TERAKHIR, bukan
+  // menyalip pesan fallback normal yang lebih informatif.
   setTimeout(function() {
     if (myOpenToken !== _SO_DETAIL_OPEN_TOKEN) return;
     const liveContentWatchdog = document.getElementById('pageContent');
     if (!liveContentWatchdog || CURRENT_PAGE !== 'soDetail') return;
     if (!liveContentWatchdog.querySelector('.brand-spinner')) return; // sudah ke-render normal, aman
     liveContentWatchdog.innerHTML = '<div class="empty-state"><div class="empty-icon">' + ICONS.warning + '</div><div class="empty-title">Memuat detail SO memakan waktu lebih lama dari biasanya</div><div class="empty-desc">Koneksi ke server mungkin sedang lambat. Klik tombol di bawah untuk mencoba lagi.</div><button class="btn btn-primary" style="margin-top:12px" onclick="renderSoDetail(\'' + escapeHtml(soId) + '\')">Coba Lagi</button></div>';
-  }, 18000);
+  }, 20000);
 
   const firstAttemptPromise = new Promise(function(resolve) {
     google.script.run
@@ -4613,8 +4642,17 @@ async function renderSoDetail(soId) {
   let res;
   try {
     res = await getCached(cacheKey, async function() {
+      // Timeout UI diturunkan dari 15 detik ke 9 detik: 15 detik membuat
+      // user menatap spinner terlalu lama sebelum ada tombol "Coba Lagi"
+      // yang bisa diklik. firstAttemptPromise (JSONP, lihat api-bridge.js)
+      // TETAP jalan di background walau uiTimeout ini menang duluan —
+      // kalau responsnya akhirnya datang, callback .then() di atas tetap
+      // akan merender otomatis (lihat komentar di dalamnya), jadi
+      // menurunkan angka ini TIDAK bikin request dibuang percuma, cuma
+      // bikin user lebih cepat dikasih pilihan "Coba Lagi" kalau memang
+      // lambat, daripada dipaksa nunggu diam 15 detik penuh.
       const uiTimeout = new Promise(function(resolve) {
-        setTimeout(function() { resolve({ ok: false, err: new Error('TIMEOUT_UI') }); }, 15000);
+        setTimeout(function() { resolve({ ok: false, err: new Error('TIMEOUT_UI') }); }, 9000);
       });
       const outcome = await Promise.race([firstAttemptPromise, uiTimeout]);
       if (outcome.ok) return outcome.result;
@@ -4626,7 +4664,7 @@ async function renderSoDetail(soId) {
     return;
   }
   if (!res) {
-    const extraRes = await callServer('getSoDetail', soId, { silent: true, maxRetries: 4 });
+    const extraRes = await callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
     if (myOpenToken !== _SO_DETAIL_OPEN_TOKEN) return; 
     if (extraRes && extraRes.success) {
       _CACHE_STORE[cacheKey] = extraRes;
@@ -5306,7 +5344,7 @@ async function exportSoFormExcel(soId) {
   let so = cached && cached.success ? cached.data : null;
   if (!so) {
     const res = await getCached(cacheKey, function() {
-      return callServer('getSoDetail', soId, { silent: true, maxRetries: 4 });
+      return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
     });
     if (!res.success) { showToast(res.message, 'error'); return; }
     so = res.data;
@@ -5675,7 +5713,7 @@ async function openPrevSoPreview(prevSoId, sku) {
 
   const cacheKey = 'soDetail:' + prevSoId;
   const res = await getCached(cacheKey, function() {
-    return callServer('getSoDetail', prevSoId, { silent: true, maxRetries: 4 });
+    return callServer('getSoDetail', prevSoId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
   });
 
   const body = document.getElementById('prevSoPreviewBody');
@@ -7329,6 +7367,7 @@ async function loadRiwayatTable(silentForce) {
   if (!searchEl || !tglMulaiEl || !tglAkhirEl || !selisihEl || !statusEl || !sortEl) return;
 
   const myToken = PAGE_NAV_TOKEN;
+  const myTipeToken = TIPE_SO_LOAD_TOKEN.riwayat;
   if (!silentForce) RIWAYAT_PAGINATION.page = 1;
   const params = { currentUser: CURRENT_USER, statusFilter: 'selesai', tipeSo: TIPE_SO_STATE.riwayat };
   if (RIWAYAT_DD) params.onlySelesai = true;
@@ -7381,12 +7420,12 @@ async function loadRiwayatTable(silentForce) {
   }, silentForce);
   clearTimeout(skeletonTimer);
   if (!res.success && !silentForce) {
-    if (myToken !== PAGE_NAV_TOKEN || !document.getElementById('riwTableBody')) return;
+    if (myToken !== PAGE_NAV_TOKEN || myTipeToken !== TIPE_SO_LOAD_TOKEN.riwayat || !document.getElementById('riwTableBody')) return;
     res = await getCached(cacheKey, function() {
       return callServer('getSoListForStore', params, { silent: true });
     }, true);
   }
-  if (myToken !== PAGE_NAV_TOKEN || !document.getElementById('riwTableBody')) return;
+  if (myToken !== PAGE_NAV_TOKEN || myTipeToken !== TIPE_SO_LOAD_TOKEN.riwayat || !document.getElementById('riwTableBody')) return;
   if (!res.success) { if (!silentForce) showToast(res.message, 'error'); return; }
 
   RIWAYAT_CACHE = res.data;
@@ -7499,7 +7538,7 @@ async function exportSoExcel(soId) {
   let so = cached && cached.success ? cached.data : null;
   if (!so) {
     const res = await getCached(cacheKey, function() {
-      return callServer('getSoDetail', soId, { silent: true, maxRetries: 4 });
+      return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
     });
     if (!res.success) { showToast(res.message, 'error'); return; }
     so = res.data;
@@ -7641,6 +7680,7 @@ function getLaporanParams() {
 }
 
 async function loadLaporanData(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.laporan;
   const params = getLaporanParams();
   const cacheKey = 'laporanData:' + JSON.stringify(params);
 
@@ -7669,6 +7709,8 @@ async function loadLaporanData(force) {
   const res = await getCached(cacheKey, function() {
     return callServer('getLaporanData', params, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.laporan) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
   LAPORAN_CACHE = res.data;
   renderLaporanData(res.data);
@@ -7850,6 +7892,7 @@ const AUDIT_SELISIH_PAGE_SIZE = 50;
 let AUDIT_SELISIH_PAGE = 1;
 
 async function loadAuditSelisihData(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.auditSelisih;
   const params = { currentUser: CURRENT_USER, tipeSo: TIPE_SO_STATE.auditSelisih };
   if (needsStorePicker() && document.getElementById('auditStoreFilter')) {
     params.store = document.getElementById('auditStoreFilter').value;
@@ -7885,6 +7928,8 @@ async function loadAuditSelisihData(force) {
   const res = await getCached(cacheKey, function() {
     return callServer('getAuditSelisihBerulang', params, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.auditSelisih) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
   AUDIT_SELISIH_CACHE = res.data;
   AUDIT_SELISIH_PAGE = 1;
@@ -8168,6 +8213,7 @@ function banSubtitleText(tipe) {
 let PERBANDINGAN_PERIODE_CACHE = null;
 
 async function loadPerbandinganPeriodeData(force) {
+  const myLoadToken = TIPE_SO_LOAD_TOKEN.perbandinganPeriode;
   const params = { currentUser: CURRENT_USER, tipeSo: TIPE_SO_STATE.perbandinganPeriode };
   if (needsStorePicker() && document.getElementById('banStoreFilter')) {
     params.store = document.getElementById('banStoreFilter').value;
@@ -8205,6 +8251,8 @@ async function loadPerbandinganPeriodeData(force) {
   const res = await getCached(cacheKey, function() {
     return callServer('getPerbandinganAntarPeriode', params, { silent: true });
   }, force);
+  // Lihat komentar TIPE_SO_LOAD_TOKEN di bindTipeSoToggle.
+  if (myLoadToken !== TIPE_SO_LOAD_TOKEN.perbandinganPeriode) return;
   if (!res.success) { showToast(res.message, 'error'); return; }
   PERBANDINGAN_PERIODE_CACHE = res.data;
   renderPerbandinganPeriodeData(res.data);
