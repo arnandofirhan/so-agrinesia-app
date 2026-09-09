@@ -8619,6 +8619,27 @@ async function loadActivityLogTable(force) {
   renderActivityLogTable(res.data, tbody);
 }
 
+// FIX (Detail Activity Log dulu selalu 1 blok teks panjang dump-semua-field,
+// tidak informatif kalau cuma 1 field yang berubah): detail SEKARANG BISA
+// berupa JSON string {summary, changes:[{field,before,after}]} yang ditulis
+// backend lewat buildChangeLogDetail_ (lihat Code.gs). Fungsi ini PARSE
+// dengan aman: kalau raw adalah JSON valid dgn shape yang diharapkan,
+// dikembalikan { summary, changes }; kalau bukan (log LAMA sebelum fix ini,
+// atau aksi non-Edit yang tetap pakai teks polos), fallback ke
+// { summary: raw, changes: [] } supaya log lama TETAP tampil apa adanya,
+// tidak error dan tidak kehilangan informasi.
+function parseActivityLogDetail_(raw) {
+  if (raw && typeof raw === 'string' && raw.charAt(0) === '{') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.summary === 'string' && Array.isArray(parsed.changes)) {
+        return { summary: parsed.summary, changes: parsed.changes, extraNote: parsed.extraNote || '' };
+      }
+    } catch (e) { }
+  }
+  return { summary: raw || '', changes: [], extraNote: '' };
+}
+
 function renderActivityLogTable(data, tbody) {
   if (!tbody || !document.body.contains(tbody)) return;
   if (!data.length) {
@@ -8643,12 +8664,13 @@ function renderActivityLogTable(data, tbody) {
   window._ACTIVITY_LOG_PAGE_DATA = pageData;
   tbody.innerHTML = pageData.map(function(l, idx) {
     const badgeClass = aksiColorMap[l.aksi] || 'badge-gray';
+    const parsedDetail = parseActivityLogDetail_(formatDetailDates(l.detail));
     return '<tr class="clickable-row" data-log-idx="' + idx + '">' +
       '<td data-label="Waktu" style="white-space:nowrap;color:var(--gray-500);font-size:12.5px;">' + escapeHtml(formatTimestampDisplay(l.timestamp)) + '</td>' +
       '<td data-label="User"><strong>' + escapeHtml(l.nama || l.username) + '</strong></td>' +
       '<td data-label="Aksi"><span class="badge ' + badgeClass + '">' + escapeHtml(l.aksi) + '</span></td>' +
       '<td data-label="Target"><span class="cell-clip cell-clip-sm">' + escapeHtml(l.target) + '</span></td>' +
-      '<td data-label="Detail" style="color:var(--gray-600);"><span class="cell-clip" style="max-width:100%;">' + escapeHtml(formatDetailDates(l.detail)) + '</span></td>' +
+      '<td data-label="Detail" style="color:var(--gray-600);"><span class="cell-clip" style="max-width:100%;">' + escapeHtml(parsedDetail.summary + (parsedDetail.extraNote ? ' (' + parsedDetail.extraNote + ')' : '')) + '</span></td>' +
     '</tr>';
   }).join('');
   tbody.querySelectorAll('tr[data-log-idx]').forEach(function(tr) {
@@ -8665,6 +8687,29 @@ function renderActivityLogTable(data, tbody) {
 
 function openActivityLogDetailModal_(l, badgeClass) {
   if (!l) return;
+  const parsedDetail = parseActivityLogDetail_(formatDetailDates(l.detail));
+  // FIX (modal Detail Aktivitas tadinya cuma dump 1 blok teks panjang,
+  // kurang informatif kalau user cuma mau lihat apa yang berubah): kalau
+  // detail-nya terstruktur (ada changes[]), tampilkan sebagai tabel
+  // Field/Sebelum/Sesudah per baris — jauh lebih cepat dibaca dibanding
+  // 1 paragraf. Kalau tidak terstruktur (log lama / aksi non-Edit), tetap
+  // fallback ke teks polos seperti sebelumnya (summary-nya = detail asli).
+  const detailBodyHtml = parsedDetail.changes.length
+    ? '<div class="change-log-table">' +
+        '<div class="change-log-row change-log-head">' +
+          '<span>Field</span><span>Sebelum</span><span>Sesudah</span>' +
+        '</div>' +
+        parsedDetail.changes.map(function(c) {
+          return '<div class="change-log-row">' +
+            '<span class="change-log-field">' + escapeHtml(c.field) + '</span>' +
+            '<span class="change-log-before">' + escapeHtml(String(c.before)) + '</span>' +
+            '<span class="change-log-after">' + escapeHtml(String(c.after)) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      (parsedDetail.extraNote ? '<div class="page-subtitle" style="margin-top:10px;">' + escapeHtml(parsedDetail.extraNote) + '</div>' : '')
+    : '<span class="detail-kv-value detail-kv-value-wrap">' + escapeHtml(parsedDetail.summary) + '</span>';
+
   openModal(
     modalHeaderHtml({ icon: ICONS.history, color: 'primary', title: 'Detail Aktivitas', subtitle: formatTimestampDisplay(l.timestamp) }) +
     '<div class="modal-body">' +
@@ -8672,7 +8717,7 @@ function openActivityLogDetailModal_(l, badgeClass) {
         '<div class="detail-kv-row"><span class="detail-kv-label">User</span><span class="detail-kv-value">' + escapeHtml(l.nama || l.username) + '</span></div>' +
         '<div class="detail-kv-row"><span class="detail-kv-label">Aksi</span><span class="detail-kv-value"><span class="badge ' + badgeClass + '">' + escapeHtml(l.aksi) + '</span></span></div>' +
         '<div class="detail-kv-row"><span class="detail-kv-label">Target</span><span class="detail-kv-value">' + escapeHtml(l.target) + '</span></div>' +
-        '<div class="detail-kv-row detail-kv-row-block"><span class="detail-kv-label">Detail</span><span class="detail-kv-value detail-kv-value-wrap">' + escapeHtml(formatDetailDates(l.detail)) + '</span></div>' +
+        '<div class="detail-kv-row detail-kv-row-block"><span class="detail-kv-label">' + (parsedDetail.changes.length ? 'Perubahan' : 'Detail') + '</span>' + detailBodyHtml + '</div>' +
       '</div>' +
     '</div>' +
     '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Tutup</button></div>'
