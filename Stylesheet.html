@@ -4660,17 +4660,26 @@
   .change-log-row + .change-log-row { border-top: 1px solid var(--gray-100); }
   .change-log-head { background: var(--gray-50, #f9fafb); font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .3px; }
   .change-log-field { font-weight: 700; color: var(--gray-900); }
+  .change-log-diff { display: contents; }
   .change-log-before { color: var(--red); word-break: break-word; }
   .change-log-after { color: var(--primary); word-break: break-word; }
+  .change-log-arrow { display: none; }
   html[data-theme="dark"] .change-log-table { border-color: var(--gray-200); }
   html[data-theme="dark"] .change-log-row + .change-log-row { border-color: var(--gray-200); }
   html[data-theme="dark"] .change-log-head { background: rgba(255,255,255,0.03); }
   @media (max-width: 480px) {
-    .change-log-row { grid-template-columns: 1fr; gap: 2px; }
+    /* FIX (UI mobile modal Detail Aktivitas kurang modern — field
+       ditumpuk vertikal 3 baris per perubahan, makan tempat): diganti jadi
+       1 baris sejajar per field (nama field kiri, "sebelum -> sesudah"
+       kanan pakai ikon panah), meniru tabel 3 kolom di desktop tapi lebih
+       ringkas untuk layar sempit. Head kolom (Field/Sebelum/Sesudah) dan
+       grid 3 kolom di desktop TIDAK diubah — hanya override khusus mobile. */
     .change-log-head { display: none; }
-    .change-log-row:not(.change-log-head) { padding: 8px 12px; }
-    .change-log-before::before { content: "Sebelum: "; color: var(--gray-500); font-weight: 700; }
-    .change-log-after::before { content: "Sesudah: "; color: var(--gray-500); font-weight: 700; }
+    .change-log-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
+    .change-log-field { flex: 0 0 auto; }
+    .change-log-diff { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+    .change-log-before, .change-log-after { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .change-log-arrow { flex: 0 0 auto; color: var(--gray-400); font-size: 13px; }
   }
 
   @keyframes highlightPulse {
