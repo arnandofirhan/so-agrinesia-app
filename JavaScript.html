@@ -8640,6 +8640,33 @@ function parseActivityLogDetail_(raw) {
   return { summary: raw || '', changes: [], extraNote: '' };
 }
 
+// FIX (popup Detail Aktivitas utk aksi non-Edit seperti "Tambah User",
+// "Tambah Store", "Buat Stock Opname", dll — detailnya BUKAN JSON changes[]
+// terstruktur, melainkan 1 string gabungan gaya "Role: X, Store: Y" yang
+// ditulis backend via logActivity_ langsung dengan string concat biasa,
+// lihat Code.gs. Sebelumnya string ini cuma didump apa adanya jadi 1
+// paragraf polos — kurang rapi/informatif). Fungsi ini MENCOBA memecah pola
+// "Label: value" yang dipisah koma jadi pasangan key-value supaya bisa
+// ditampilkan sebagai daftar rapi (mirip section User/Aksi/Target di
+// atasnya), TANPA perlu ubah backend sama sekali. Kalau pola tidak cocok
+// (misal koma ada di dalam value itu sendiri, atau tidak ada "Label:" sama
+// sekali), balikin null supaya caller fallback ke teks polos seperti biasa
+// — jadi tidak ada risiko salah pecah/hilang informasi untuk kasus aneh.
+function parsePlainDetailPairs_(text) {
+  if (!text || typeof text !== 'string' || text.indexOf(':') === -1) return null;
+  // Split by comma HANYA kalau tepat setelahnya ada "Kata: " (heuristik
+  // sederhana biar tidak salah pecah kalau ada koma di dalam sebuah value,
+  // misal "Catatan: barang habis, restock besok" -> itu 1 value, bukan 2 pair).
+  const parts = text.split(/,\s*(?=[A-Za-z][A-Za-z0-9 /_-]*:\s)/);
+  const pairs = [];
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^([A-Za-z][A-Za-z0-9 /_-]*?):\s*(.*)$/);
+    if (!m || !m[2]) return null;
+    pairs.push({ label: m[1].trim(), value: m[2].trim() });
+  }
+  return pairs.length ? pairs : null;
+}
+
 function renderActivityLogTable(data, tbody) {
   if (!tbody || !document.body.contains(tbody)) return;
   if (!data.length) {
@@ -8711,7 +8738,21 @@ function openActivityLogDetailModal_(l, badgeClass) {
         }).join('') +
       '</div>' +
       (parsedDetail.extraNote ? '<div class="page-subtitle" style="margin-top:10px;">' + escapeHtml(parsedDetail.extraNote) + '</div>' : '')
-    : '<span class="detail-kv-value detail-kv-value-wrap">' + escapeHtml(parsedDetail.summary) + '</span>';
+    : (function() {
+        // Aksi non-Edit (Tambah User, Tambah Store, Buat SO, dll): coba
+        // pecah "Label: value, Label2: value2" jadi daftar rapi. Kalau
+        // tidak cocok polanya, fallback ke teks polos apa adanya seperti semula.
+        const pairs = parsePlainDetailPairs_(parsedDetail.summary);
+        if (!pairs) return '<span class="detail-kv-value detail-kv-value-wrap">' + escapeHtml(parsedDetail.summary) + '</span>';
+        return '<div class="change-log-table">' +
+          pairs.map(function(p) {
+            return '<div class="change-log-row change-log-row-plain">' +
+              '<span class="change-log-field">' + escapeHtml(p.label) + '</span>' +
+              '<span class="change-log-plain-value">' + escapeHtml(p.value) + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      })();
 
   openModal(
     modalHeaderHtml({ icon: ICONS.history, color: 'primary', title: 'Detail Aktivitas', subtitle: formatTimestampDisplay(l.timestamp) }) +
