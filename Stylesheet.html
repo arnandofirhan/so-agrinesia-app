@@ -4743,11 +4743,20 @@
     font-weight: 700;
     font-size: 12.5px;
     text-align: center;
-    word-break: break-word;
+    /* FIX: value panjang (mis. angka barcode 13 digit) tadinya word-break
+       jadi 2 baris di dalam pill bulat -> kelihatan aneh/tidak rapi. Pill
+       sekarang dipaksa 1 baris (nowrap); kalau value tetap lebih lebar dari
+       pill, teksnya di-scroll horizontal halus di dalam pill itu sendiri
+       (bukan melebarkan card atau memotong teks), jadi bentuk pill & layout
+       card tetap konsisten walau isinya panjang. */
+    white-space: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
     display: flex;
     align-items: center;
     justify-content: center;
   }
+  .change-log-before::-webkit-scrollbar, .change-log-after::-webkit-scrollbar { display: none; }
   .change-log-before { color: var(--red); background: rgba(239, 68, 68, 0.1); }
   .change-log-after { color: var(--primary); background: rgba(15, 77, 46, 0.1); }
   .change-log-arrow {
@@ -4778,7 +4787,7 @@
     /* Di layar lebih lebar: field di kiri, diff (pill+panah) di kanan, 1 baris sejajar. */
     .change-log-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
     .change-log-field { flex: 0 0 auto; }
-    .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 60%; }
+    .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 72%; }
   }
   /* Varian utk aksi non-Edit (Tambah User, Tambah Store, dll) yang detailnya
      dipecah oleh parsePlainDetailPairs_ jadi "Label: value" tanpa before/after
