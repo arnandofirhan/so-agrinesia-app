@@ -5339,17 +5339,19 @@ function buildSoFormExportSpec(so) {
 }
 
 async function exportSoFormExcel(soId) {
-  const cacheKey = 'soDetail:' + soId;
-  const cached = peekCached(cacheKey);
-  let so = cached && cached.success ? cached.data : null;
-  if (!so) {
-    const res = await getCached(cacheKey, function() {
-      return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
-    });
-    if (!res.success) { showToast(res.message, 'error'); return; }
-    so = res.data;
-  }
-  const spec = buildSoFormExportSpec(so);
+  showLoading('Menyiapkan Export Form SO...');
+  try {
+    const cacheKey = 'soDetail:' + soId;
+    const cached = peekCached(cacheKey);
+    let so = cached && cached.success ? cached.data : null;
+    if (!so) {
+      const res = await getCached(cacheKey, function() {
+        return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
+      });
+      if (!res.success) { showToast(res.message, 'error'); return; }
+      so = res.data;
+    }
+    const spec = buildSoFormExportSpec(so);
   const cols = spec.columns;
   const numberColSet = {};
   spec.numberCols.forEach(function(k) { numberColSet[k] = true; });
@@ -5689,6 +5691,9 @@ async function exportSoFormExcel(soId) {
   XLSX.utils.book_append_sheet(wb, wsImport, IMPORT_SHEET_NAME);
   XLSX.writeFile(wb, spec.filenameBase + '_' + exportTimestamp() + '.xlsx');
   showToast('Export Form SO berhasil.', 'success');
+  } finally {
+    hideLoading();
+  }
 }
 
 function prevSelisihBadge(d) {
@@ -7533,19 +7538,24 @@ function confirmDeleteSo(soId, refreshTarget) {
 }
 
 async function exportSoExcel(soId) {
-  const cacheKey = 'soDetail:' + soId;
-  const cached = peekCached(cacheKey);
-  let so = cached && cached.success ? cached.data : null;
-  if (!so) {
-    const res = await getCached(cacheKey, function() {
-      return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
-    });
-    if (!res.success) { showToast(res.message, 'error'); return; }
-    so = res.data;
+  showLoading('Menyiapkan Export Excel...');
+  try {
+    const cacheKey = 'soDetail:' + soId;
+    const cached = peekCached(cacheKey);
+    let so = cached && cached.success ? cached.data : null;
+    if (!so) {
+      const res = await getCached(cacheKey, function() {
+        return callServer('getSoDetail', soId, { silent: true, maxRetries: 1, timeoutMs: 9000 });
+      });
+      if (!res.success) { showToast(res.message, 'error'); return; }
+      so = res.data;
+    }
+    const spec = buildSoExportSpec(so);
+    exportSpecAsExcel(spec);
+    showToast('Export Excel berhasil.', 'success');
+  } finally {
+    hideLoading();
   }
-  const spec = buildSoExportSpec(so);
-  exportSpecAsExcel(spec);
-  showToast('Export Excel berhasil.', 'success');
 }
 
 let LAPORAN_CACHE = null;
