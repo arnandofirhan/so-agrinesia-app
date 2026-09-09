@@ -8702,8 +8702,11 @@ function openActivityLogDetailModal_(l, badgeClass) {
         parsedDetail.changes.map(function(c) {
           return '<div class="change-log-row">' +
             '<span class="change-log-field">' + escapeHtml(c.field) + '</span>' +
-            '<span class="change-log-before">' + escapeHtml(String(c.before)) + '</span>' +
-            '<span class="change-log-after">' + escapeHtml(String(c.after)) + '</span>' +
+            '<span class="change-log-diff">' +
+              '<span class="change-log-before">' + escapeHtml(String(c.before)) + '</span>' +
+              '<span class="change-log-arrow">&#8594;</span>' +
+              '<span class="change-log-after">' + escapeHtml(String(c.after)) + '</span>' +
+            '</span>' +
           '</div>';
         }).join('') +
       '</div>' +
