@@ -4530,6 +4530,21 @@ async function renderSoDetail(soId) {
     content.innerHTML = brandSpinnerHtml('Memuat...');
   }
 
+  // WATCHDOG independen (di luar promise chain manapun di bawah): jaring
+  // pengaman terakhir kalau karena race condition/bug lain yang belum
+  // ketemu, spinner "Memuat..." tetap nyangkut di layar padahal
+  // sebenarnya request sudah lama selesai (atau gagal diam-diam). Dicek
+  // langsung dari DOM (bukan dari state promise), supaya independen dari
+  // jalur mana pun yang mungkin gagal. myOpenToken dicek supaya tidak
+  // mengganggu kalau user sudah pindah ke SO/halaman lain sebelum 18 detik.
+  setTimeout(function() {
+    if (myOpenToken !== _SO_DETAIL_OPEN_TOKEN) return;
+    const liveContentWatchdog = document.getElementById('pageContent');
+    if (!liveContentWatchdog || CURRENT_PAGE !== 'soDetail') return;
+    if (!liveContentWatchdog.querySelector('.brand-spinner')) return; // sudah ke-render normal, aman
+    liveContentWatchdog.innerHTML = '<div class="empty-state"><div class="empty-icon">' + ICONS.warning + '</div><div class="empty-title">Memuat detail SO memakan waktu lebih lama dari biasanya</div><div class="empty-desc">Koneksi ke server mungkin sedang lambat. Klik tombol di bawah untuk mencoba lagi.</div><button class="btn btn-primary" style="margin-top:12px" onclick="renderSoDetail(\'' + escapeHtml(soId) + '\')">Coba Lagi</button></div>';
+  }, 18000);
+
   const firstAttemptPromise = new Promise(function(resolve) {
     google.script.run
       .withSuccessHandler(function(result) { resolve({ ok: true, result: result }); })
@@ -4546,12 +4561,20 @@ async function renderSoDetail(soId) {
       _CACHE_STORE[cacheKey] = outcome.result;
     }
 
-    if (!document.getElementById('pageContent') || CURRENT_PAGE !== 'soDetail' || editingThisSo) {
+    // PENTING: JANGAN pakai variabel `content` yang di-capture di closure
+    // awal fungsi (baris atas) — kalau antara renderSoDetail() dipanggil
+    // dan promise ini resolve ada navigasi SPA lain yang menimpa innerHTML
+    // container utama, `content` lama bisa jadi node yang SUDAH TERLEPAS
+    // dari DOM (detached). Render ke node detached itu tidak error, tapi
+    // JUGA TIDAK TAMPIL — hasilnya spinner nyangkut selamanya sampai user
+    // reload manual. Selalu re-query elemen terbaru di sini.
+    const liveContent = document.getElementById('pageContent');
+    if (!liveContent || CURRENT_PAGE !== 'soDetail' || editingThisSo) {
       return outcome;
     }
 
     const isFreshShell = !CURRENT_SO_DETAIL || CURRENT_SO_DETAIL.soId !== outcome.result.data.soId ||
-      content.querySelector('.empty-state') || content.querySelector('.brand-spinner');
+      liveContent.querySelector('.empty-state') || liveContent.querySelector('.brand-spinner');
     CURRENT_SO_DETAIL = outcome.result.data;
     document.getElementById('pageTitle').textContent = 'Detail SO — ' + outcome.result.data.soId;
     try {
@@ -4569,7 +4592,20 @@ async function renderSoDetail(soId) {
       }
       loadSoPrevSelisihBadgesLazy(soId);
     } catch (renderErr) {
+      // FALLBACK PENTING: sebelumnya kalau renderSoDetailContent() gagal di
+      // sini, cuma di-log ke console TANPA fallback UI — spinner tetap
+      // nampil selamanya. Sekarang, kalau gagal render normal dan halaman
+      // masih benar-benar di Detail SO yang sama (bukan sudah pindah), coba
+      // paksa render ulang dari awal (bukan partial update) sebagai upaya
+      // terakhir sebelum benar-benar menyerah ke pesan error.
       console.error('Gagal merender Detail SO (hasil telat) ' + soId + ':', renderErr);
+      try {
+        if (myOpenToken === _SO_DETAIL_OPEN_TOKEN && document.getElementById('pageContent') && CURRENT_PAGE === 'soDetail') {
+          renderSoDetailContent();
+        }
+      } catch (retryErr) {
+        console.error('Retry render Detail SO juga gagal ' + soId + ':', retryErr);
+      }
     }
     return outcome;
   });
@@ -4623,7 +4659,8 @@ async function renderSoDetail(soId) {
   } catch (renderErr) {
     console.error('Gagal merender Detail SO ' + soId + ':', renderErr);
     invalidateCache(cacheKey); 
-    content.innerHTML =
+    const liveContentFallback = document.getElementById('pageContent') || content;
+    liveContentFallback.innerHTML =
       '<div class="empty-state">' +
         '<div class="empty-icon">' + ICONS.warning + '</div>' +
         '<div class="empty-title">Gagal menampilkan Detail SO</div>' +
@@ -5331,13 +5368,16 @@ async function exportSoFormExcel(soId) {
   const colSelisihQty = XLSX.utils.encode_col(idxSelisihQty);
   const colSelisihRp = XLSX.utils.encode_col(idxSelisihRp);
   const colKodeItem = XLSX.utils.encode_col(idxKodeItem);
-  // Format "Rp" SEBELUMNYA pakai asterisk ("Rp"* #,##0) — tanda * di custom
-  // number format Excel berarti "ulangi karakter berikutnya untuk mengisi
-  // penuh lebar kolom" (gaya akuntansi), yang membuat jarak antara "Rp" dan
-  // angka BERBEDA-BEDA tergantung panjang angka & lebar kolom → kelihatan
-  // berantakan/tidak rata. Diganti pakai spasi tetap biasa supaya "Rp" dan
-  // angka selalu berjarak konsisten apa pun lebar kolomnya.
-  const FORMAT_RP = '"Rp" #,##0;"Rp" -#,##0;"Rp" -';
+  // Format "Rp" pakai asterisk ("Rp"* #,##0) — teknik resmi Excel supaya
+  // "Rp" MENTOK KIRI dan angka MENTOK KANAN dalam satu cell yang sama
+  // (asterisk = "isi sisa lebar cell dengan spasi di posisi ini"). Sempat
+  // diganti ke spasi tetap karena waktu itu lebar kolom masih kurang
+  // (grep wch = tanpa +4 padding) sehingga "Rp" kepotong — root cause
+  // SEBENARNYA adalah lebar kolom, bukan asterisknya. Sekarang lebar kolom
+  // sudah dikoreksi (lihat wch += 4 di bawah untuk kolom selisihRp), jadi
+  // asterisk aman dipakai lagi dan memberi hasil visual yang kamu mau:
+  // "Rp" rata kiri, angka rata kanan.
+  const FORMAT_RP = '"Rp"* #,##0;"Rp"* -#,##0;"Rp"* -';
 
   // ===== Sheet "IMPORT" =====
   // Berisi data mentah dengan header & URUTAN KOLOM PERSIS seperti file
@@ -5589,11 +5629,12 @@ async function exportSoFormExcel(soId) {
     const headerLen = String(c.label).length;
     const padding = isNum ? 2 : 2;
     let wch = Math.max(maxLen + padding, headerLen + 2);
-    // Kolom Selisih Rp pakai FORMAT_RP ("Rp" #,##0) sehingga tampilan
-    // aslinya di Excel LEBIH PANJANG daripada angka mentahnya saja (mis.
-    // angka "-24500" cuma 6 karakter, tapi tampil sebagai "Rp -24.500").
-    // Tanpa tambahan ini, lebar kolom dihitung dari angka mentah saja dan
-    // "Rp" jadi kepotong / terdorong keluar kolom.
+    // Kolom Selisih Rp pakai FORMAT_RP ("Rp"* #,##0 — asterisk supaya "Rp"
+    // rata kiri & angka rata kanan) sehingga tampilan aslinya di Excel
+    // LEBIH PANJANG daripada angka mentahnya saja (mis. angka "-24500"
+    // cuma 6 karakter, tapi tampil sebagai "Rp    -24.500"). Tanpa
+    // tambahan ini, lebar kolom dihitung dari angka mentah saja dan "Rp"
+    // jadi kepotong / terdorong keluar kolom.
     if (c.key === 'selisihRp') {
       wch += 4;
     }
