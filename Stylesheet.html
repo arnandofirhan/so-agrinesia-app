@@ -4679,39 +4679,62 @@
   .change-log-before, .change-log-after {
     flex: 1 1 0;
     min-width: 0;
-    padding: 5px 10px;
+    min-height: 26px;
+    box-sizing: border-box;
+    padding: 4px 10px;
     border-radius: 999px;
     font-weight: 700;
     font-size: 12.5px;
     text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .change-log-before { color: var(--red); background: rgba(239, 68, 68, 0.1); }
   .change-log-after { color: var(--primary); background: rgba(15, 77, 46, 0.1); }
   .change-log-arrow {
     flex: 0 0 auto;
+    align-self: center;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
+    box-sizing: border-box;
     border-radius: 50%;
     background: var(--gray-100);
     color: var(--gray-500);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
   }
-  html[data-theme="dark"] .change-log-row { background: rgba(255,255,255,0.03); border-color: var(--gray-200); }
-  html[data-theme="dark"] .change-log-before { background: rgba(239, 68, 68, 0.15); }
-  html[data-theme="dark"] .change-log-after { background: rgba(52, 211, 153, 0.15); }
-  html[data-theme="dark"] .change-log-arrow { background: rgba(255,255,255,0.06); color: var(--gray-400); }
+  /* FIX (dark mode): teks pill "sesudah" tadinya pakai var(--primary) yang
+     merupakan hijau gelap (dipakai utk tombol dsb di atas bg terang) —
+     nyaris tak terbaca di atas card gelap. Dark mode butuh warna teks
+     terang sendiri (bukan var(--primary)) supaya kontras cukup, dan panah
+     dipertegas (border tipis + warna lebih terang) supaya kelihatan center
+     dan jelas di antara 2 pill. */
+  html[data-theme="dark"] .change-log-row { background: rgba(255,255,255,0.04); border-color: var(--gray-200); }
+  html[data-theme="dark"] .change-log-before { color: #fca5a5; background: rgba(248, 113, 113, 0.18); }
+  html[data-theme="dark"] .change-log-after { color: #6ee7b7; background: rgba(52, 211, 153, 0.18); }
+  html[data-theme="dark"] .change-log-arrow { background: rgba(255,255,255,0.08); color: var(--gray-500); border: 1px solid rgba(255,255,255,0.12); }
   @media (min-width: 481px) {
     /* Di layar lebih lebar: field di kiri, diff (pill+panah) di kanan, 1 baris sejajar. */
     .change-log-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
     .change-log-field { flex: 0 0 auto; }
     .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 60%; }
+  }
+  /* Varian utk aksi non-Edit (Tambah User, Tambah Store, dll) yang detailnya
+     dipecah oleh parsePlainDetailPairs_ jadi "Label: value" tanpa before/after
+     — jadi tidak butuh pill merah/hijau atau panah, cukup label + value biasa
+     dalam 1 baris rapi, konsisten dgn card .change-log-row lainnya.
+     MOBILE (<=480px): tetap stack vertikal (ikut default .change-log-row)
+     supaya label panjang + value panjang tidak berebut 1 baris sempit dan
+     jadi berdempetan/terpotong — baru disejajarkan 1 baris di layar >=481px. */
+  .change-log-plain-value { font-size: 12.5px; color: var(--gray-700, var(--gray-900)); word-break: break-word; }
+  @media (min-width: 481px) {
+    .change-log-row-plain { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+    .change-log-plain-value { text-align: right; max-width: 60%; }
   }
 
   @keyframes highlightPulse {
