@@ -1103,6 +1103,36 @@ function skeletonTableRowsHtml(count, cols) {
   return html;
 }
 
+// FIX (skeleton loading Activity Log tadinya numpang skeletonTableRowsHtml
+// generik yang di-render sebagai 1 baris <td colspan> grid garis-garis
+// mendatar khusus tabel desktop — tapi tabel .table-activity-log di layar
+// mobile diubah total jadi kartu (lihat CSS @media max-width:900px:
+// .table-activity-log tr { display:grid; grid-template-areas: "waktu aksi" /
+// "user user" / "target target" / "detail detail" }). Karena skeleton lama
+// pakai colspan (1 <td> lebar penuh) bukan 5 <td data-label="..."> terpisah
+// seperti baris data asli, CSS card mobile itu TIDAK PERNAH kena ke skeleton
+// -> hasilnya skeleton selalu tampil sbg garis-garis polos gaya tabel,
+// beda total dgn kartu asli yang muncul setelah data datang (kelihatan
+// "loncat" dari garis ke kartu). Fungsi baru ini bikin <td> per kolom
+// dengan data-label yang SAMA PERSIS spt renderActivityLogTable, supaya CSS
+// mobile yang sudah ada otomatis membentuknya jadi kartu skeleton yang
+// menyerupai kartu aslinya (bukan reka ulang CSS terpisah yang gampang
+// tidak sinkron kalau layout kartu asli berubah nanti).
+function skeletonActivityLogRowsHtml(count) {
+  let html = '';
+  for (let i = 0; i < (count || 6); i++) {
+    html +=
+      '<tr class="skeleton-row">' +
+        '<td data-label="Waktu"><div class="skeleton skeleton-line" style="width:64px;"></div></td>' +
+        '<td data-label="User"><div class="skeleton skeleton-line" style="width:110px;"></div></td>' +
+        '<td data-label="Aksi"><div class="skeleton skeleton-badge" style="width:96px;"></div></td>' +
+        '<td data-label="Target"><div class="skeleton skeleton-line" style="width:80px;"></div></td>' +
+        '<td data-label="Detail"><div class="skeleton skeleton-line" style="width:85%;"></div></td>' +
+      '</tr>';
+  }
+  return html;
+}
+
 // FIX: skeleton generik di atas (garis putus-putus dalam 1 sel colspan)
 // cuma enak dilihat di tabel desktop. Begitu tabel berubah jadi kartu di
 // mobile (table-card-generic-so / table-riwayat-card), skeleton itu tetap
@@ -8507,7 +8537,7 @@ async function renderActivityLog() {
     '</div>' +
     '<div class="table-wrapper"><div class="table-toolbar" id="logPageSizeBar"></div><div class="table-scroll"><table class="table-activity-log">' +
       '<thead><tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Target</th><th>Detail</th></tr></thead>' +
-      '<tbody id="logTableBody">' + skeletonTableRowsHtml(8, 5) + '</tbody>' +
+      '<tbody id="logTableBody">' + skeletonActivityLogRowsHtml(6) + '</tbody>' +
     '</table></div></div>' +
     '<div class="pagination-bar" id="logPaginationBar"></div>' +
     '<div class="danger-zone">' +
