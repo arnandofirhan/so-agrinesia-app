@@ -83,6 +83,7 @@ let STORE_LIST_CACHE = [];
 let STORE_MASTER_CACHE = [];
 let CATEGORY_LIST_CACHE = []; 
 let CATEGORY_MASTER_CACHE = []; 
+let CATEGORY_MGMT_GROUP_EXPORT_DEFAULTS = ['AGRI', 'Bahan Baku', 'Kemasan Jual', 'RASALOKAL', 'NON-AGRINESIA'];
 let ITEM_MASTER_CACHE = [];
 let SO_ACTIVE_LIST_CACHE = [];
 let CURRENT_SO_DETAIL = null; 
@@ -441,6 +442,7 @@ async function getCategoryMasterListCached(force) {
   return getCached('categoryMasterList', async function() {
     const res = await callServer('getCategoryMasterList', { currentUser: CURRENT_USER }, { silent: true });
     CATEGORY_MASTER_CACHE = res.success ? res.data : [];
+    if (res.success && res.groupExportOptions) CATEGORY_MGMT_GROUP_EXPORT_DEFAULTS = res.groupExportOptions;
     return res;
   }, force);
 }
@@ -2651,6 +2653,18 @@ function selisihBadge(selisih) {
   return '<span class="badge badge-gray">0</span>';
 }
 
+// Kelas warna untuk sel Selisih Qty / Selisih Rp di tabel (bukan badge):
+// minus = merah, plus = hijau, balance (0) = putih/normal (tanpa kelas).
+// Dipakai di semua tabel yang menampilkan angka selisih mentah (bukan lewat
+// selisihBadge) supaya konsisten — sebelumnya banyak tempat cuma menandai
+// merah untuk minus tanpa hijau untuk plus.
+function selisihColorClass_(selisih) {
+  selisih = Number(selisih) || 0;
+  if (selisih < 0) return 'text-red';
+  if (selisih > 0) return 'text-green';
+  return '';
+}
+
 async function loadTrenData(force) {
   const params = { currentUser: CURRENT_USER, tipeSo: TIPE_SO_STATE.dashboard };
   if (needsStorePicker()) {
@@ -3966,8 +3980,11 @@ function exportSpecAsExcel(spec) {
   const COLOR_SUBTOTAL_BG = 'F4C99B';
   const COLOR_GRANDTOTAL_BG = '4472C4';
   const COLOR_SELISIH_MINUS_BG = 'FF0000';
-  const COLOR_SELISIH_ZERO_BG = 'C6EFCE';  
-  const COLOR_SELISIH_PLUS_BG = 'FFEB9C';  
+  // Selisih minus = merah, plus = hijau, balance (0) = putih biasa (tanpa
+  // warna khusus). Sebelumnya nama variabel PLUS/ZERO tertukar isinya
+  // (ZERO diisi hijau, PLUS diisi kuning) sehingga baris balance yang
+  // justru kelihatan hijau, bukan baris plus.
+  const COLOR_SELISIH_PLUS_BG = 'C6EFCE';
   const BORDER_THIN = { style: 'thin', color: { rgb: 'B7B7B7' } };
   const THIN_BORDER = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
 
@@ -4132,10 +4149,8 @@ function exportSpecAsExcel(spec) {
           cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
         } else if (numVal > 0) {
           cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_PLUS_BG } };
-        } else {
-          cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_ZERO_BG } };
         }
-      } else if (isNeg) {
+        // balance (0) sengaja tidak diberi fill sama sekali — tetap putih/normal. else if (isNeg) {
         cellStyle.font = { color: { rgb: 'DC2626' } };
       }
 
@@ -5128,29 +5143,23 @@ function buildSoExportSpec(so) {
   };
 }
 
-const SO_FORM_CATEGORY_MAP_ = {
-  'ATJ': 'AGRI', 'BKJ': 'AGRI', 'BKT': 'AGRI', 'BPT': 'AGRI',
-  'NON-AGRINESIA': 'NON-AGRINESIA',
-  'RL': 'RASALOKAL', 'RLN': 'RASALOKAL',
-  'BAHAN BAKU KEMASAN': 'KEMASAN JUAL'
-};
-function mapSoFormCategory_(rawKategori) {
-  const key = String(rawKategori || '').trim().toUpperCase();
-  return SO_FORM_CATEGORY_MAP_[key] || String(rawKategori || 'Tanpa Kategori');
-}
-
-const SO_FORM_CATEGORY_ORDER_ = ['AGRI', 'RASALOKAL', 'NON-AGRINESIA'];
+// Grouping export Form SO dulu di-hardcode di sini (SO_FORM_CATEGORY_MAP_
+// per-SKU-prefix) — SEKARANG diambil LIVE dari kolom "Group Export" yang
+// diisi Admin lewat menu Category Management (lihat itemExportGroupLookup_
+// di Code.gs), dikirim per-item sebagai d.groupExport oleh getSoDetail.
+// Jadi kategori baru apa pun (mis. LKP, BSM, dst) otomatis masuk grup yang
+// benar begitu Admin isi Group Export-nya, TANPA perlu edit kode ini lagi.
+const SO_FORM_CATEGORY_ORDER_ = ['AGRI', 'Bahan Baku', 'Kemasan Jual', 'RASALOKAL', 'NON-AGRINESIA'];
 function soFormCategorySortRank_(cat) {
   if (cat === 'Tanpa Kategori') return 1000;
-  if (cat === 'KEMASAN JUAL') return 999;
-  const idx = SO_FORM_CATEGORY_ORDER_.indexOf(cat);
+  const idx = SO_FORM_CATEGORY_ORDER_.findIndex(function(g) { return g.toLowerCase() === String(cat).toLowerCase(); });
   return idx === -1 ? 500 : idx;
 }
 
 function buildSoFormExportSpec(so) {
   const groups = {};
   so.details.forEach(function(d) {
-    const cat = mapSoFormCategory_(d.kategori);
+    const cat = String(d.groupExport || 'Tanpa Kategori');
     if (!groups[cat]) groups[cat] = [];
     groups[cat].push(d);
   });
@@ -5273,6 +5282,7 @@ async function exportSoFormExcel(soId) {
   const COLOR_SUBTOTAL_BG = 'F4C99B';
   const COLOR_GRANDTOTAL_BG = '4472C4';
   const COLOR_SELISIH_MINUS_BG = 'FF0000';
+  const COLOR_SELISIH_PLUS_BG = 'C6EFCE';
   const BORDER_THIN = { style: 'thin', color: { rgb: 'B7B7B7' } };
   const THIN_BORDER = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
 
@@ -5474,9 +5484,15 @@ async function exportSoFormExcel(soId) {
       } else if (isSubtotal) {
         cellStyle.fill = { fgColor: { rgb: COLOR_SUBTOTAL_BG } };
         cellStyle.font = { bold: true };
-      } else if (isSelisihCol && isNeg) {
-        cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_MINUS_BG } };
-        cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
+      } else if (isSelisihCol) {
+        const numVal = typeof ws[addr] !== 'undefined' && ws[addr].t === 'n' ? ws[addr].v : NaN;
+        if (isNeg) {
+          cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_MINUS_BG } };
+          cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
+        } else if (numVal > 0) {
+          cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_PLUS_BG } };
+        }
+        // balance (0) sengaja tidak diberi fill — tetap putih/normal.
       } else if (isNeg) {
         cellStyle.font = { color: { rgb: 'DC2626' } };
       }
@@ -7580,16 +7596,16 @@ function renderLaporanData(d) {
   storeBody.innerHTML = d.storeSummary.length ? d.storeSummary.map(function(s) {
     const rowClause = "goToRiwayat('laporan',{presetStore:'" + escapeHtml(s.store).replace(/'/g, "\\'") + "'," + dateClause + "})";
     return '<tr class="clickable-row" title="Lihat Riwayat SO store ini" onclick="' + rowClause + '"><td>' + escapeHtml(s.store) + '</td><td class="text-center">' + formatNumber(s.soCount) + '</td>' +
-      '<td class="text-right ' + (s.selisihQty < 0 ? 'text-red' : '') + '">' + formatNumber(s.selisihQty) + '</td>' +
-      '<td class="text-right ' + (s.selisihValue < 0 ? 'text-red' : '') + '">' + formatRupiah(s.selisihValue) + '</td></tr>';
+      '<td class="text-right ' + selisihColorClass_(s.selisihQty) + '">' + formatNumber(s.selisihQty) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(s.selisihValue) + '">' + formatRupiah(s.selisihValue) + '</td></tr>';
   }).join('') : '<tr><td colspan="4" class="td-empty-state"><div class="empty-state"><div class="empty-icon">' + ICONS.store + '</div><div class="empty-title">Belum ada data store</div><div class="empty-desc">Ringkasan per store akan muncul setelah ada SO Selesai pada periode ini.</div></div></td></tr>';
 
   const topItemBody = document.getElementById('lapTopItemBody');
   topItemBody.innerHTML = d.topItemsByValue.length ? d.topItemsByValue.map(function(it) {
     const rowClause = "openItemDetailModal('" + escapeHtml(it.sku).replace(/'/g, "\\'") + "')";
     return '<tr class="clickable-row" title="Lihat Detail Item" onclick="' + rowClause + '"><td>' + escapeHtml(it.sku) + '</td><td>' + escapeHtml(it.nama) + '</td>' +
-      '<td class="text-right ' + (it.selisihQty < 0 ? 'text-red' : '') + '">' + formatNumber(it.selisihQty) + '</td>' +
-      '<td class="text-right ' + (it.selisihValue < 0 ? 'text-red' : '') + '">' + formatRupiah(it.selisihValue) + '</td></tr>';
+      '<td class="text-right ' + selisihColorClass_(it.selisihQty) + '">' + formatNumber(it.selisihQty) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(it.selisihValue) + '">' + formatRupiah(it.selisihValue) + '</td></tr>';
   }).join('') : '<tr><td colspan="4" class="td-empty-state"><div class="empty-state"><div class="empty-icon">' + ICONS.report + '</div><div class="empty-title">Belum ada data item</div><div class="empty-desc">Top item berdasarkan selisih value akan muncul setelah ada SO Selesai pada periode ini.</div></div></td></tr>';
 
   const soBody = document.getElementById('lapSoBody');
@@ -7603,8 +7619,8 @@ function renderLaporanData(d) {
     return '<tr><td data-label="SO ID" class="card-title"><a href="#" onclick="navigateTo(\'soDetail\',{soId:\'' + escapeHtml(r.soId).replace(/'/g,"\\'") + '\'});return false;"><strong>' + escapeHtml(r.soId) + '</strong></a></td>' +
       '<td data-label="Store">' + escapeHtml(r.store) + '</td><td data-label="Tanggal">' + escapeHtml(formatDateDisplay(r.tanggal)) + '</td>' +
       '<td data-label="Jml Item" class="text-center">' + formatNumber(r.itemCount) + '</td>' +
-      '<td data-label="Selisih Qty" class="text-right ' + (r.selisihQty < 0 ? 'text-red' : '') + '">' + formatNumber(r.selisihQty) + '</td>' +
-      '<td data-label="Selisih Value" class="text-right ' + (r.selisihValue < 0 ? 'text-red' : '') + '">' + formatRupiah(r.selisihValue) + '</td></tr>';
+      '<td data-label="Selisih Qty" class="text-right ' + selisihColorClass_(r.selisihQty) + '">' + formatNumber(r.selisihQty) + '</td>' +
+      '<td data-label="Selisih Value" class="text-right ' + selisihColorClass_(r.selisihValue) + '">' + formatRupiah(r.selisihValue) + '</td></tr>';
   }).join('');
 
   renderPaginationBar(document.getElementById('lapPaginationBar'), d.rows.length, LAPORAN_PAGINATION, 'SO', function() {
@@ -7820,8 +7836,8 @@ function renderAuditSelisihData(d) {
       '<td class="text-center"><strong>' + g.occurrences.length + 'x</strong></td>' +
       '<td><span class="badge ' + patternClass + '">' + escapeHtml(g.pattern) + '</span></td>' +
       '<td>' + perubahan + '</td>' +
-      '<td class="text-right ' + (g.totalQty < 0 ? 'text-red' : '') + '">' + formatNumber(g.totalQty) + '</td>' +
-      '<td class="text-right ' + (g.totalValue < 0 ? 'text-red' : '') + '">' + formatRupiah(g.totalValue) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(g.totalQty) + '">' + formatNumber(g.totalQty) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(g.totalValue) + '">' + formatRupiah(g.totalValue) + '</td>' +
       '<td class="audit-riwayat-cell">' + riwayatHtml + '</td></tr>';
   }).join('') : '<tr><td colspan="9" class="td-empty-state"><div class="empty-state"><div class="empty-icon">' + ICONS.target + '</div><div class="empty-title">Tidak ada item dengan selisih berulang</div><div class="empty-desc">Coba turunkan "Min. Berulang" atau perluas rentang tanggal.</div></div></td></tr>';
 
@@ -8129,9 +8145,9 @@ function renderPerbandinganPeriodeData(d) {
   const storeBody = document.getElementById('banStoreBody');
   storeBody.innerHTML = d.perStoreComparison.length ? d.perStoreComparison.map(function(s) {
     return '<tr><td>' + escapeHtml(s.store) + '</td>' +
-      '<td class="text-right ' + (s.periode1.selisihValue < 0 ? 'text-red' : '') + '">' + formatRupiah(s.periode1.selisihValue) + '</td>' +
-      '<td class="text-right ' + (s.periode2.selisihValue < 0 ? 'text-red' : '') + '">' + formatRupiah(s.periode2.selisihValue) + '</td>' +
-      '<td class="text-right ' + (s.deltaValue < 0 ? 'text-red' : '') + '">' + formatRupiah(s.deltaValue) + '</td></tr>';
+      '<td class="text-right ' + selisihColorClass_(s.periode1.selisihValue) + '">' + formatRupiah(s.periode1.selisihValue) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(s.periode2.selisihValue) + '">' + formatRupiah(s.periode2.selisihValue) + '</td>' +
+      '<td class="text-right ' + selisihColorClass_(s.deltaValue) + '">' + formatRupiah(s.deltaValue) + '</td></tr>';
   }).join('') : '<tr><td colspan="4" class="td-empty-state"><div class="empty-state"><div class="empty-icon">' + ICONS.scale + '</div><div class="empty-title">Belum ada data pada kedua periode</div><div class="empty-desc">Perbandingan per store akan muncul setelah ada SO Selesai pada Periode 1 dan Periode 2.</div></div></td></tr>';
 
   renderBanTrendSummary(d);
@@ -9583,7 +9599,7 @@ async function renderCategoryManagement() {
       '</div>' +
     '</div>' +
     '<div class="table-wrapper"><div class="table-toolbar" id="categoryPageSizeBar"></div><div class="table-scroll"><table class="table-card-generic">' +
-      '<thead><tr><th>Nama Kategori</th><th class="text-center">Jumlah Item</th><th>Status</th><th>Updated At</th><th class="text-center sticky-col-right">Aksi</th></tr></thead>' +
+      '<thead><tr><th>Nama Kategori</th><th>Group Export</th><th class="text-center">Jumlah Item</th><th>Status</th><th>Updated At</th><th class="text-center sticky-col-right">Aksi</th></tr></thead>' +
       '<tbody id="categoryTableBody">' + (hasCached ? '' : skeletonTableRowsHtml(6, 5)) + '</tbody>' +
     '</table></div></div>' +
     '<div class="pagination-bar" id="categoryPaginationBar"></div>';
@@ -9693,8 +9709,8 @@ function renderCategoryRows(categories) {
     const statusEl = document.getElementById('categoryStatusFilter');
     const isFiltered = (searchEl && searchEl.value.trim()) || (statusEl && statusEl.value) || CATEGORY_MGMT_KPI_FILTER;
     tbody.innerHTML = isFiltered ?
-      ('<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">' + ICONS.clipboard + '</div><div class="empty-title">Belum ada data</div><div class="empty-desc">Belum ditemukan kategori pada filter yang dipilih.</div></div></td></tr>') :
-      ('<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">' + ICONS.clipboard + '</div><div class="empty-title">Belum ada kategori</div><div class="empty-desc">Tambah kategori pertama (mis. Bakpia, Bakery, Minuman) untuk mulai mengelompokkan Item Master.</div></div></td></tr>');
+      ('<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">' + ICONS.clipboard + '</div><div class="empty-title">Belum ada data</div><div class="empty-desc">Belum ditemukan kategori pada filter yang dipilih.</div></div></td></tr>') :
+      ('<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">' + ICONS.clipboard + '</div><div class="empty-title">Belum ada kategori</div><div class="empty-desc">Tambah kategori pertama (mis. Bakpia, Bakery, Minuman) untuk mulai mengelompokkan Item Master.</div></div></td></tr>');
     clearPaginationBarById('categoryPaginationBar', 'categoryPageSizeBar');
     return;
   }
@@ -9704,6 +9720,7 @@ function renderCategoryRows(categories) {
     const statusBadgeHtml = String(c.status).toLowerCase() === 'aktif' ? '<span class="badge badge-green">Aktif</span>' : '<span class="badge badge-red">Nonaktif</span>';
     return '<tr data-category-id="' + escapeHtml(c.categoryId) + '">' +
       '<td data-label="Nama Kategori" class="card-title"><strong>' + escapeHtml(c.nama) + '</strong></td>' +
+      '<td data-label="Group Export">' + (c.groupExport ? '<span class="badge badge-blue">' + escapeHtml(c.groupExport) + '</span>' : '<span class="empty-desc" style="font-size:12px;">-</span>') + '</td>' +
       '<td data-label="Jumlah Item" class="text-center">' + (c.itemCount > 0
         ? '<span class="badge badge-gray" style="cursor:pointer;" title="Lihat item di kategori ini" onclick="navigateTo(\'itemMaster\',{presetSearch:\'\',presetKategori:\'' + escapeHtml(c.nama).replace(/'/g, "\\'") + '\'})">' + formatNumber(c.itemCount) + ' item</span>'
         : '<span class="empty-desc" style="font-size:12px;">0 item</span>') + '</td>' +
@@ -9723,17 +9740,68 @@ function renderCategoryRows(categories) {
   }, document.getElementById('categoryPageSizeBar'));
 }
 
+// Kumpulan nama Group Export yang sudah pernah dipakai (default bawaan +
+// custom yang sudah pernah diketik Admin sebelumnya di kategori lain) —
+// dipakai untuk mengisi dropdown Group Export di form Tambah/Edit Kategori
+// supaya Admin tidak perlu ketik ulang nama yang sama tiap kali.
+function categoryGroupExportOptions_() {
+  const set = {};
+  (CATEGORY_MGMT_GROUP_EXPORT_DEFAULTS || ['AGRI', 'Bahan Baku', 'Kemasan Jual', 'RASALOKAL', 'NON-AGRINESIA']).forEach(function(g) { set[g] = true; });
+  CATEGORY_MASTER_CACHE.forEach(function(c) { if (c.groupExport) set[c.groupExport] = true; });
+  return Object.keys(set).sort();
+}
+
+// Render <select> Group Export + opsi "+ Tambah Group Baru..." yang saat
+// dipilih memunculkan input teks bebas. selectedValue kosong berarti
+// "Tanpa Kategori" (tidak dipilih apa-apa) — dibiarkan begitu sampai Admin
+// memilih grup, bukan dipaksa isi.
+function groupExportFieldHtml_(fieldId, selectedValue) {
+  const options = categoryGroupExportOptions_();
+  const isCustomSelected = selectedValue && options.indexOf(selectedValue) === -1;
+  let optsHtml = '<option value="">— Tanpa Kategori —</option>';
+  options.forEach(function(g) {
+    optsHtml += '<option value="' + escapeHtml(g) + '"' + (g === selectedValue ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+  });
+  optsHtml += '<option value="__custom__"' + (isCustomSelected ? ' selected' : '') + '>+ Tambah Group Baru...</option>';
+  return '<div class="form-group">' +
+      '<label>Group Export</label>' +
+      '<div style="font-size:11.5px;color:var(--gray-400);margin-bottom:6px;">Grup induk untuk pengelompokan saat Export Form SO (mis. AGRI, Bahan Baku, RASALOKAL). Boleh dikosongkan.</div>' +
+      '<select id="' + fieldId + '">' + optsHtml + '</select>' +
+      '<input type="text" id="' + fieldId + 'Custom" placeholder="Nama Group Export baru" style="margin-top:8px;" value="' + (isCustomSelected ? escapeHtml(selectedValue) : '') + '" class="' + (isCustomSelected ? '' : 'hidden') + '">' +
+    '</div>';
+}
+
+function setupGroupExportFieldToggle_(fieldId) {
+  const select = document.getElementById(fieldId);
+  const custom = document.getElementById(fieldId + 'Custom');
+  if (!select || !custom) return;
+  select.addEventListener('change', function() {
+    custom.classList.toggle('hidden', select.value !== '__custom__');
+    if (select.value === '__custom__') custom.focus();
+  });
+}
+
+function resolveGroupExportValue_(fieldId) {
+  const select = document.getElementById(fieldId);
+  const custom = document.getElementById(fieldId + 'Custom');
+  if (!select) return '';
+  if (select.value === '__custom__') return (custom ? custom.value.trim() : '');
+  return select.value.trim();
+}
+
 function openAddCategoryModal() {
   openModal(
     modalHeaderHtml({ icon: ICONS.plus, color: 'primary', title: 'Tambah Kategori', subtitle: 'Buat kelompok item baru' }) +
     '<div class="modal-body">' +
       '<div class="form-group"><label>Nama Kategori</label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="newCategoryNama" placeholder="Contoh: Bakpia, Bakery, Minuman"></div></div>' +
+      groupExportFieldHtml_('newCategoryGroupExport', '') +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Batal</button>' +
       '<button class="btn btn-primary" id="saveNewCategoryBtn">' + ICONS.save + ' Simpan</button>' +
     '</div>'
   );
+  setupGroupExportFieldToggle_('newCategoryGroupExport');
   const validation = attachFormValidation([
     { id: 'newCategoryNama', label: 'Nama Kategori', validate: function(v) { return v.length < 2 ? 'Nama kategori minimal 2 karakter' : null; } }
   ], document.getElementById('saveNewCategoryBtn'));
@@ -9741,7 +9809,8 @@ function openAddCategoryModal() {
     if (!validation.validateAll()) return;
     runWithButtonLoading(this, async function() {
       const nama = document.getElementById('newCategoryNama').value.trim();
-      const res = await callServer('addCategoryMaster', { nama: nama, currentUser: CURRENT_USER }, { silent: true });
+      const groupExport = resolveGroupExportValue_('newCategoryGroupExport');
+      const res = await callServer('addCategoryMaster', { nama: nama, groupExport: groupExport, currentUser: CURRENT_USER }, { silent: true });
       if (res.success) {
         showToast(res.message, 'success');
         closeModal();
@@ -9763,13 +9832,15 @@ function openEditCategoryModal(categoryId) {
     modalHeaderHtml({ icon: ICONS.edit, color: 'blue', title: 'Edit Kategori', subtitle: category.nama }) +
     '<div class="modal-body">' +
       '<div class="form-group"><label>Nama Kategori</label><div class="field-icon-wrap">' + ICONS.filterField + '<input type="text" id="editCategoryNama" value="' + escapeHtml(category.nama) + '"></div></div>' +
-      (category.itemCount > 0 ? '<div style="font-size:11.5px;color:var(--gray-400);margin-top:-8px;">Kategori ini dipakai oleh ' + formatNumber(category.itemCount) + ' item — mengganti nama akan otomatis memperbarui semua item tersebut.</div>' : '') +
+      (category.itemCount > 0 ? '<div style="font-size:11.5px;color:var(--gray-400);margin-top:-8px;margin-bottom:12px;">Kategori ini dipakai oleh ' + formatNumber(category.itemCount) + ' item — mengganti nama akan otomatis memperbarui semua item tersebut.</div>' : '') +
+      groupExportFieldHtml_('editCategoryGroupExport', category.groupExport || '') +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Batal</button>' +
       '<button class="btn btn-primary" id="saveEditCategoryBtn">' + ICONS.save + ' Simpan</button>' +
     '</div>'
   );
+  setupGroupExportFieldToggle_('editCategoryGroupExport');
   const validation = attachFormValidation([
     { id: 'editCategoryNama', label: 'Nama Kategori', validate: function(v) { return v.length < 2 ? 'Nama kategori minimal 2 karakter' : null; } }
   ], document.getElementById('saveEditCategoryBtn'));
@@ -9777,7 +9848,8 @@ function openEditCategoryModal(categoryId) {
     if (!validation.validateAll()) return;
     runWithButtonLoading(this, async function() {
       const nama = document.getElementById('editCategoryNama').value.trim();
-      const res = await callServer('updateCategoryMaster', { categoryId: category.categoryId, nama: nama, currentUser: CURRENT_USER }, { silent: true });
+      const groupExport = resolveGroupExportValue_('editCategoryGroupExport');
+      const res = await callServer('updateCategoryMaster', { categoryId: category.categoryId, nama: nama, groupExport: groupExport, currentUser: CURRENT_USER }, { silent: true });
       if (res.success) {
         showToast(res.message, 'success');
         closeModal();
