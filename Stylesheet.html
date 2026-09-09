@@ -4651,6 +4651,28 @@
   }
   html[data-theme="dark"] .detail-kv-value-wrap { background: rgba(255,255,255,0.03); border-color: var(--gray-200); }
 
+  /* Tabel Sebelum/Sesudah di modal Detail Aktivitas (Activity Log) — lihat
+     openActivityLogDetailModal_ di JavaScript.html. Hanya dipakai kalau
+     detail-nya terstruktur (ada changes[]); log lama tetap pakai
+     .detail-kv-value-wrap teks polos seperti sebelumnya. */
+  .change-log-table { border: 1px solid var(--gray-100); border-radius: 8px; overflow: hidden; }
+  .change-log-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 8px 12px; font-size: 12.5px; }
+  .change-log-row + .change-log-row { border-top: 1px solid var(--gray-100); }
+  .change-log-head { background: var(--gray-50, #f9fafb); font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .3px; }
+  .change-log-field { font-weight: 700; color: var(--gray-900); }
+  .change-log-before { color: var(--red); word-break: break-word; }
+  .change-log-after { color: var(--primary); word-break: break-word; }
+  html[data-theme="dark"] .change-log-table { border-color: var(--gray-200); }
+  html[data-theme="dark"] .change-log-row + .change-log-row { border-color: var(--gray-200); }
+  html[data-theme="dark"] .change-log-head { background: rgba(255,255,255,0.03); }
+  @media (max-width: 480px) {
+    .change-log-row { grid-template-columns: 1fr; gap: 2px; }
+    .change-log-head { display: none; }
+    .change-log-row:not(.change-log-head) { padding: 8px 12px; }
+    .change-log-before::before { content: "Sebelum: "; color: var(--gray-500); font-weight: 700; }
+    .change-log-after::before { content: "Sesudah: "; color: var(--gray-500); font-weight: 700; }
+  }
+
   @keyframes highlightPulse {
     0% { box-shadow: 0 0 0 0 var(--primary-ring); }
     70% { box-shadow: 0 0 0 10px rgba(12,92,48,0); }
