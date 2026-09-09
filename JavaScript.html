@@ -4150,7 +4150,8 @@ function exportSpecAsExcel(spec) {
         } else if (numVal > 0) {
           cellStyle.fill = { fgColor: { rgb: COLOR_SELISIH_PLUS_BG } };
         }
-        // balance (0) sengaja tidak diberi fill sama sekali — tetap putih/normal. else if (isNeg) {
+        // balance (0) sengaja tidak diberi fill sama sekali — tetap putih/normal.
+      } else if (isNeg) {
         cellStyle.font = { color: { rgb: 'DC2626' } };
       }
 
@@ -5397,7 +5398,51 @@ async function exportSoFormExcel(soId) {
       const align = c.align || (isNumCol ? 'right' : 'left');
       let cellStyle = { alignment: { horizontal: align }, border: THIN_BORDER };
 
-      if (ci === idxQtyFisik) {
+      if (ci === idxQtyFisikDepan) {
+        // Subtotal/Grand Total Qty Fisik Depan = SUM baris data di
+        // kategori/rentangnya — sebelumnya kolom ini cuma diisi ANGKA
+        // statis (hasil penjumlahan di JS) untuk baris subtotal/grandtotal,
+        // BUKAN rumus Excel, jadi tidak otomatis ter-update kalau Qty Fisik
+        // Depan salah satu item di kategori itu diedit manual di Excel.
+        if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colQtyFisikDepan + r[0] + ':' + colQtyFisikDepan + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+          cellStyle.numFmt = '#,##0';
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colQtyFisikDepan + r[0] + ':' + colQtyFisikDepan + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+          cellStyle.numFmt = '#,##0';
+        } else if (isDataRow) {
+          const n = typeof v === 'number' ? v : parseFloat(v);
+          if (v === '' || v === null || v === undefined) {
+            // Sel benar-benar kosong (belum diisi) — JANGAN tulis apa pun,
+            // supaya SUM di atas tidak menjalar #VALUE! (lihat catatan sel
+            // kosong di blok isNumCol umum di bawah).
+          } else if (!isNaN(n)) {
+            ws[addr] = { t: 'n', v: n };
+            cellStyle.numFmt = '#,##0';
+          }
+        }
+      } else if (ci === idxQtyFisikGudang) {
+        if (isSubtotal) {
+          const r = allCatRanges[allCatRanges.length - 1];
+          ws[addr] = { t: 'n', f: 'SUM(' + colQtyFisikGudang + r[0] + ':' + colQtyFisikGudang + r[1] + ')', v: (typeof v === 'number' ? v : 0) };
+          cellStyle.numFmt = '#,##0';
+        } else if (isGrandtotal) {
+          const ranges = allCatRanges.map(function(r) { return colQtyFisikGudang + r[0] + ':' + colQtyFisikGudang + r[1]; }).join(',');
+          ws[addr] = { t: 'n', f: 'SUM(' + ranges + ')', v: (typeof v === 'number' ? v : 0) };
+          cellStyle.numFmt = '#,##0';
+        } else if (isDataRow) {
+          const n = typeof v === 'number' ? v : parseFloat(v);
+          if (v === '' || v === null || v === undefined) {
+            // Sel kosong — sengaja tidak ditulis apa pun (lihat catatan sama
+            // seperti Qty Fisik Depan di atas).
+          } else if (!isNaN(n)) {
+            ws[addr] = { t: 'n', v: n };
+            cellStyle.numFmt = '#,##0';
+          }
+        }
+      } else if (ci === idxQtyFisik) {
         // Total Qty Fisik = Qty Fisik Depan + Qty Fisik Gudang
         if (isDataRow) {
           ws[addr] = { t: 'n', f: colQtyFisikDepan + excelRowNum + '+' + colQtyFisikGudang + excelRowNum, v: (typeof v === 'number' ? v : 0) };
@@ -5538,6 +5583,15 @@ async function exportSoFormExcel(soId) {
     const headerLen = String(c.label).length;
     const padding = isNum ? 2 : 2;
     let wch = Math.max(maxLen + padding, headerLen + 2);
+    // Kolom Selisih Rp pakai FORMAT_RP ("Rp"* #,##0 — format akuntansi
+    // dengan prefix "Rp" + padding rata kanan) sehingga tampilan aslinya
+    // di Excel LEBIH PANJANG daripada angka mentahnya saja (mis. angka
+    // "-24500" cuma 6 karakter, tapi tampil sebagai "Rp    -24.500").
+    // Tanpa tambahan ini, lebar kolom dihitung dari angka mentah saja dan
+    // "Rp" jadi kepotong / terdorong keluar kolom.
+    if (c.key === 'selisihRp') {
+      wch += 4;
+    }
     if (c.key !== 'namaItem') {
       wch = Math.min(wch, 40);
     } else {
