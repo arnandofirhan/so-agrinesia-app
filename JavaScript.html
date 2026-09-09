@@ -5150,7 +5150,7 @@ function buildSoExportSpec(so) {
 // di Code.gs), dikirim per-item sebagai d.groupExport oleh getSoDetail.
 // Jadi kategori baru apa pun (mis. LKP, BSM, dst) otomatis masuk grup yang
 // benar begitu Admin isi Group Export-nya, TANPA perlu edit kode ini lagi.
-const SO_FORM_CATEGORY_ORDER_ = ['AGRI', 'Bahan Baku', 'Kemasan Jual', 'RASALOKAL', 'NON-AGRINESIA'];
+const SO_FORM_CATEGORY_ORDER_ = ['AGRI', 'NON-AGRINESIA', 'RASALOKAL', 'Kemasan Jual', 'Bahan Baku'];
 function soFormCategorySortRank_(cat) {
   if (cat === 'Tanpa Kategori') return 1000;
   const idx = SO_FORM_CATEGORY_ORDER_.findIndex(function(g) { return g.toLowerCase() === String(cat).toLowerCase(); });
@@ -5331,7 +5331,13 @@ async function exportSoFormExcel(soId) {
   const colSelisihQty = XLSX.utils.encode_col(idxSelisihQty);
   const colSelisihRp = XLSX.utils.encode_col(idxSelisihRp);
   const colKodeItem = XLSX.utils.encode_col(idxKodeItem);
-  const FORMAT_RP = '"Rp"* #,##0;"Rp"* -#,##0;"Rp"* -';
+  // Format "Rp" SEBELUMNYA pakai asterisk ("Rp"* #,##0) — tanda * di custom
+  // number format Excel berarti "ulangi karakter berikutnya untuk mengisi
+  // penuh lebar kolom" (gaya akuntansi), yang membuat jarak antara "Rp" dan
+  // angka BERBEDA-BEDA tergantung panjang angka & lebar kolom → kelihatan
+  // berantakan/tidak rata. Diganti pakai spasi tetap biasa supaya "Rp" dan
+  // angka selalu berjarak konsisten apa pun lebar kolomnya.
+  const FORMAT_RP = '"Rp" #,##0;"Rp" -#,##0;"Rp" -';
 
   // ===== Sheet "IMPORT" =====
   // Berisi data mentah dengan header & URUTAN KOLOM PERSIS seperti file
@@ -5583,10 +5589,9 @@ async function exportSoFormExcel(soId) {
     const headerLen = String(c.label).length;
     const padding = isNum ? 2 : 2;
     let wch = Math.max(maxLen + padding, headerLen + 2);
-    // Kolom Selisih Rp pakai FORMAT_RP ("Rp"* #,##0 — format akuntansi
-    // dengan prefix "Rp" + padding rata kanan) sehingga tampilan aslinya
-    // di Excel LEBIH PANJANG daripada angka mentahnya saja (mis. angka
-    // "-24500" cuma 6 karakter, tapi tampil sebagai "Rp    -24.500").
+    // Kolom Selisih Rp pakai FORMAT_RP ("Rp" #,##0) sehingga tampilan
+    // aslinya di Excel LEBIH PANJANG daripada angka mentahnya saja (mis.
+    // angka "-24500" cuma 6 karakter, tapi tampil sebagai "Rp -24.500").
     // Tanpa tambahan ini, lebar kolom dihitung dari angka mentah saja dan
     // "Rp" jadi kepotong / terdorong keluar kolom.
     if (c.key === 'selisihRp') {
@@ -9909,6 +9914,14 @@ function openEditCategoryModal(categoryId) {
         closeModal();
         invalidateCache('categoryList');
         invalidateCache('itemMaster'); 
+        // PENTING: getSoDetail (dipakai Export Form SO) meng-cache hasilnya
+        // per SO (key "soDetail:<soId>") termasuk field groupExport per item.
+        // Kalau Group Export kategori diubah di sini TANPA menghapus cache
+        // ini, Export Form SO yang sudah pernah dibuka sebelumnya akan
+        // TETAP memakai grouping LAMA (SO nyelip di grup yang salah / urutan
+        // export tidak sinkron) sampai user reload penuh. Hapus semua entry
+        // "soDetail:" supaya export berikutnya selalu ambil data terbaru.
+        invalidateCache(null, { scope: 'soDetail:' });
         await loadCategoryTable(true);
         flashRowSuccess(document.querySelector('#categoryTableBody tr[data-category-id="' + CSS.escape(category.categoryId) + '"]'));
       } else {
