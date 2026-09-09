@@ -192,7 +192,10 @@
     border-color: rgba(255,255,255,0.18);
   }
   html[data-theme="dark"] .filter-field.is-active {
-    background: var(--primary);
+    /* Konsisten dengan mode terang: tint lembut, bukan hijau solid, supaya
+       teks var(--primary-text) (hijau terang di dark mode) tetap kontras
+       jelas terbaca, bukan hijau-terang di atas hijau-solid. */
+    background: var(--primary-lighter);
     border-color: var(--primary);
   }
   html[data-theme="dark"] input[type="text"], html[data-theme="dark"] input[type="password"],
@@ -1630,7 +1633,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .filter-field.is-active .cs-trigger { color: #fff; }
+  .filter-field.is-active .cs-trigger { color: var(--primary-text); }
   .filter-field:has(select:disabled) .cs-trigger { cursor: wait; }
   .cs-panel {
     position: absolute;
