@@ -296,6 +296,32 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* FIX (klik/tap di card atau baris tabel clickable seperti row Activity
+     Log memunculkan kotak highlight biru transparan bawaan browser Chrome
+     Android/WebView — bukan style dari CSS kita, tapi default behavior
+     "tap highlight" & focus outline browser saat elemen non-form disentuh.
+     Ini mengganggu karena terlihat spt bug/shadow aneh, padahal browser
+     hanya menandai elemen yang baru disentuh). Di-nonaktifkan secara GLOBAL
+     (bukan cuma di 1 elemen) supaya konsisten di semua card/baris yang bisa
+     diklik di seluruh aplikasi, sekarang maupun yang ditambah nanti —
+     tanpa menghapus :focus-visible utk aksesibilitas keyboard (lihat aturan
+     :focus-visible di bawah, itu TETAP tampil, cuma tap-highlight-nya yang
+     dimatikan). */
+  * { -webkit-tap-highlight-color: transparent; }
+  a, button, [role="button"], .clickable-row, tr[data-log-idx],
+  .table-activity-log tr, .table-card-generic tr {
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+  }
+  a:focus, button:focus, [role="button"]:focus, .clickable-row:focus,
+  tr[data-log-idx]:focus, .table-activity-log tr:focus, .table-card-generic tr:focus {
+    outline: none;
+  }
+  a:focus-visible, button:focus-visible, [role="button"]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
   html, body {
     height: 100%;
     font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
