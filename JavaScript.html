@@ -632,8 +632,13 @@ function setupAutoFilterBar(barEl, resetBtn, applyFn, resetFn) {
 }
 
 function setupMobileFilterCollapse_(fieldsEl, controls, initialValues) {
+  // Setiap child langsung dihitung sebagai 1 unit collapsible, termasuk
+  // .filter-date-range (wrapper 2 tanggal Dari/Sampai) yang sebelumnya
+  // tidak pernah ikut collapse karena bukan .filter-field, sehingga di
+  // mobile 4 pill tanggal (skenario Periode 1+2) selalu tampil penuh.
   const collapsible = Array.prototype.slice.call(fieldsEl.children).filter(function(child) {
-    return child.classList.contains('filter-field') && !child.classList.contains('grow');
+    if (child.classList.contains('grow')) return false;
+    return child.classList.contains('filter-field') || child.classList.contains('filter-date-range');
   });
   if (collapsible.length <= 2) return; 
   if (fieldsEl.querySelector('.filter-more-toggle')) {
@@ -664,10 +669,14 @@ function setupMobileFilterCollapse_(fieldsEl, controls, initialValues) {
   });
 
   collapsible.forEach(function(fieldEl) {
-    const ctrl = fieldEl.querySelector('input, select');
-    if (!ctrl) return;
-    ctrl.addEventListener('change', function() { updateFilterMoreBadge_(fieldsEl); });
-    ctrl.addEventListener('input', function() { updateFilterMoreBadge_(fieldsEl); });
+    // fieldEl bisa berupa .filter-field tunggal ATAU .filter-date-range
+    // yang membungkus 2 .filter-field (Dari/Sampai) — pasang listener ke
+    // semua input/select di dalamnya, bukan cuma yang pertama ditemukan.
+    const ctrls = Array.prototype.slice.call(fieldEl.querySelectorAll('input, select'));
+    ctrls.forEach(function(ctrl) {
+      ctrl.addEventListener('change', function() { updateFilterMoreBadge_(fieldsEl); });
+      ctrl.addEventListener('input', function() { updateFilterMoreBadge_(fieldsEl); });
+    });
   });
   updateFilterMoreBadge_(fieldsEl);
 }
@@ -676,7 +685,12 @@ function updateFilterMoreBadge_(fieldsEl) {
   const toggle = fieldsEl.querySelector('.filter-more-toggle');
   if (!toggle) return;
   const badge = toggle.querySelector('.fmt-badge');
-  const activeCount = fieldsEl.querySelectorAll('.filter-field:not(.grow).is-active').length;
+  // Hitung .filter-field aktif di luar .filter-date-range, DITAMBAH 1 kalau
+  // ADA field tanggal (di dalam .filter-date-range manapun) yang aktif —
+  // supaya rentang tanggal dihitung sebagai 1 filter, bukan 2 filter terpisah
+  // (Dari + Sampai), biar badge count-nya masuk akal buat user.
+  const activeCount = fieldsEl.querySelectorAll('.filter-field:not(.grow):not(.filter-date-range .filter-field).is-active').length +
+    (fieldsEl.querySelector('.filter-date-range .filter-field.is-active') ? 1 : 0);
   if (badge) {
     badge.textContent = String(activeCount);
     badge.classList.toggle('hidden', activeCount === 0);
