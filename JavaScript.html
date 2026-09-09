@@ -266,7 +266,36 @@ async function warmSoDataCache() {
       p.periode2Mulai = toDateInput(thisMonday);
       p.periode2Akhir = toDateInput(today);
       return p;
-    }); }
+    }); },
+    // FIX (menu Activity Log/User/Store/Category Management & Role
+    // Permission tampil skeleton kosong sampai menunya dibuka manual):
+    // menu-menu ini sudah punya getter ber-cache sendiri (getUserListCached,
+    // getStoreMasterListCached, getCategoryMasterListCached, cache key
+    // 'rolePermissionData', dan cache key 'activityLog:'+JSON.stringify(...)
+    // di loadActivityLogTable), tapi SEBELUM FIX INI tidak ada satupun job
+    // di warmSoDataCache() yang mengisi cache-cache tsb — jadi walau
+    // prefetchAllMenus() sempat me-render menu ini ke buffer tersembunyi,
+    // hasil fetch-nya tidak pernah disimpan ke _CACHE_STORE dan langsung
+    // dibuang begitu buffer dihapus. Job di bawah ini memanggil getter yang
+    // SAMA PERSIS dipakai render asli menu tsb, dengan urutan/isi params
+    // yang SAMA PERSIS dgn default saat menu dibuka pertama kali (filter
+    // kosong), supaya cache key cocok dan render asli langsung dapat cache
+    // hit (lihat peekCached di loadActivityLogTable/renderRolePermission).
+    function() { return canAccessPage('userManagement') ? getUserListCached().catch(function() {}) : Promise.resolve(); },
+    function() { return canAccessPage('storeManagement') ? getStoreMasterListCached().catch(function() {}) : Promise.resolve(); },
+    function() { return canAccessPage('categoryManagement') ? getCategoryMasterListCached().catch(function() {}) : Promise.resolve(); },
+    function() {
+      if (!canAccessPage('activityLog')) return Promise.resolve();
+      const p = { search: '', username: '', aksi: '', tanggalMulai: '', tanggalAkhir: '', currentUser: CURRENT_USER };
+      const cacheKey = 'activityLog:' + JSON.stringify(p);
+      if (peekCached(cacheKey)) return Promise.resolve();
+      return getCached(cacheKey, function() { return callServer('getActivityLog', p, { silent: true }); }).catch(function() {});
+    },
+    function() {
+      if (!canAccessPage('rolePermission')) return Promise.resolve();
+      if (peekCached('rolePermissionData')) return Promise.resolve();
+      return getCached('rolePermissionData', function() { return callServer('getRolePermissionData', { currentUser: CURRENT_USER }, { silent: true }); }).catch(function() {});
+    }
   ];
 
   for (let i = 0; i < jobs.length; i++) {
@@ -1379,14 +1408,21 @@ function enterApp() {
     prefetchAllMenus();
     warmSoDataCache();
   };
+  // FIX (menu lain masih skeleton kosong kalau dibuka tak lama setelah
+  // login): sebelumnya delay 6000ms sebelum prefetch mulai sama sekali —
+  // dalam praktiknya user hampir selalu sempat klik menu lain sebelum itu.
+  // Diperpendek ke 1500ms (masih cukup supaya request Dashboard utama yang
+  // sedang ditunggu user tidak berebut bandwidth/kuota eksekusi dengan
+  // job warm-cache di background), requestIdleCallback tetap dipakai kalau
+  // tersedia supaya tidak menunda interaksi user yang sedang berlangsung.
   setTimeout(function() {
     if (!CURRENT_USER) return;
     if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(startPrefetch, { timeout: 4000 });
+      requestIdleCallback(startPrefetch, { timeout: 2500 });
     } else {
       startPrefetch();
     }
-  }, 6000);
+  }, 1500);
 }
 
 let _PREFETCH_TOKEN = 0;
@@ -4525,6 +4561,31 @@ function openCreateSoModal() {
         TIPE_SO_STATE.stockOpname = params.tipe;
         closeModal();
         navigateTo('soDetail', { soId: res.data.soId });
+      } else if (res.code === 'SO_PERIOD_LIMIT') {
+        // FIX (saran limit SO 1x per periode): dibanding toast error polos,
+        // modal ini kasih konteks jelas (SO mana yang bentrok) + tombol
+        // langsung ke SO tsb, supaya user tidak perlu cari manual di
+        // Riwayat SO kalau memang niatnya melanjutkan SO yang sudah ada.
+        closeModal();
+        openModal(
+          modalHeaderHtml({ icon: ICONS.warning, color: 'red', title: 'SO Sudah Ada di Periode Ini', subtitle: 'SO ' + (res.data && res.data.tipe ? res.data.tipe : '') }) +
+          '<div class="modal-body">' +
+            '<div class="page-subtitle" style="margin-bottom:14px;">' + escapeHtml(res.message) + '</div>' +
+          '</div>' +
+          '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Tutup</button>' +
+            (res.data && res.data.existingSoId
+              ? '<button class="btn btn-primary" id="gotoExistingSoBtn">' + ICONS.chevronRight + ' Lihat SO Tersebut</button>'
+              : '') +
+          '</div>'
+        );
+        const gotoBtn = document.getElementById('gotoExistingSoBtn');
+        if (gotoBtn) {
+          gotoBtn.addEventListener('click', function() {
+            closeModal();
+            navigateTo('soDetail', { soId: res.data.existingSoId });
+          });
+        }
       } else {
         showToast(res.message, 'error');
       }
