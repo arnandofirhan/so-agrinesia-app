@@ -1534,21 +1534,25 @@
   .filter-field:hover { border-color: var(--gray-300); }
   .filter-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
   .filter-field.grow { flex: 1 1 240px; max-width: 380px; }
+  /* Sebelumnya is-active = background hijau SOLID penuh (var(--primary)).
+     Di mobile, saat 2-4 field tanggal aktif sekaligus (kasus Perbandingan
+     Antar Periode), ini menghasilkan tumpukan blok hijau tebal yang berat
+     secara visual (lihat keluhan awal). Diganti jadi tint lembut + teks
+     hijau + border hijau tipis — tetap jelas "aktif" tapi tidak "berat". */
   .filter-field.is-active {
-    background: var(--primary);
+    background: var(--primary-lighter);
     border-color: var(--primary);
   }
   .filter-field.is-active .filter-field-label {
-    background: rgba(255,255,255,0.22);
-    color: #fff;
+    background: transparent;
+    color: var(--primary-text);
   }
   .filter-field.is-active select,
   .filter-field.is-active input[type="text"],
   .filter-field.is-active input[type="date"] {
-    color: #fff;
+    color: var(--primary-text);
   }
-  .filter-field.is-active .filter-field-chevron svg { stroke: #fff; }
-  .filter-field.is-active input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  .filter-field.is-active .filter-field-chevron svg { stroke: var(--primary-text); }
   .filter-field-label {
     display: none;
   }
@@ -2115,7 +2119,11 @@
     .filter-bar-actions { justify-content: flex-end; min-height: 0; }
     .filter-bar-count { font-size: 11.5px; padding: 2px 4px 0; }
 
-    .filter-bar-fields:has(.filter-more-toggle) .filter-field:not(.grow) {
+    /* Collapsed: sembunyikan semua .filter-field top-level DAN wrapper
+       .filter-date-range (dulu tidak ke-cover, jadi 4 pill tanggal di
+       Perbandingan Antar Periode selalu tampil penuh walau belum expand). */
+    .filter-bar-fields:has(.filter-more-toggle) .filter-field:not(.grow),
+    .filter-bar-fields:has(.filter-more-toggle) .filter-date-range {
       display: none;
     }
     .filter-bar-fields.is-expanded {
@@ -2136,8 +2144,28 @@
       height: auto;
       border-radius: 14px;
     }
+    /* Rentang tanggal (Dari/Sampai atau Periode 1/2) dibuka sebagai 1 blok
+       penuh lebar di dalam grid 2 kolom, BUKAN "display:contents" (yang
+       sebelumnya membuat tiap pill tanggal ikut skema grid 2-kolom generik
+       dan malah numpuk 4 pill penuh berurutan tanpa pengelompokan). Sekarang
+       setiap .filter-date-range jadi 1 card ringkas: 2 tanggal berdampingan
+       rapi di dalamnya, dengan Store/filter lain tetap di kolom terpisah. */
     .filter-bar-fields.is-expanded .filter-date-range {
-      display: contents;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      grid-column: 1 / -1;
+      align-items: center;
+      background: var(--gray-50, #f8fafc);
+      border: 1px solid var(--gray-200);
+      border-radius: 14px;
+      padding: 6px;
+    }
+    .filter-bar-fields.is-expanded .filter-date-range .filter-field {
+      border: none;
+      background: var(--white);
+      padding: 7px 10px;
+      border-radius: 10px;
     }
     .filter-bar-fields.is-expanded .filter-date-sep {
       display: none;
@@ -5107,7 +5135,16 @@
     .topbar-title { font-size: 13.5px; }
     .topbar { padding: 9px 10px; gap: 6px; }
     .content { padding: 12px; padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
-    .filter-date-range { flex-direction: column; align-items: stretch; gap: 8px; }
+    /* Fallback untuk filter-bar TANPA tombol "Filter" (≤2 field, jadi
+       filter-more-toggle tidak dipasang) — dulu 1 kolom penuh (2 pill
+       tanggal ditumpuk vertikal), sekarang 2 kolom berdampingan supaya
+       tetap ringkas walau tidak lewat mode collapse/expand. */
+    .filter-date-range {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      align-items: center;
+    }
     .filter-date-range .filter-date-sep { display: none; }
     .perm-table td:first-child, .perm-table th:first-child { min-width: 160px; }
     .perm-menu-cell-label { font-size: 12.5px; }
