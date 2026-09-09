@@ -4788,6 +4788,23 @@
     .change-log-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
     .change-log-field { flex: 0 0 auto; }
     .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 72%; }
+    /* FIX (desktop): sebelumnya .change-log-before/.change-log-after dipaksa
+       "flex: 1 1 0" (sama lebar berdua) di dalam .change-log-diff yang
+       max-width-nya dibatasi 72% — kalau isinya angka panjang (barcode 13
+       digit), pill jadi lebih sempit dari teksnya dan teks discroll diam-diam
+       ke kanan lewat overflow-x:auto (tanpa scrollbar terlihat), jadi
+       KELIHATANNYA seperti kepotong padahal cuma ke-scroll. Di desktop, pill
+       sekarang auto-lebar ikut panjang teksnya (bukan dipaksa sama rata),
+       dan .change-log-diff dibolehkan melebar (max-width dinaikkan) supaya
+       kedua pill dapat ruang cukup tanpa perlu scroll. Mobile TIDAK disentuh
+       (aturan di luar media query ini tetap berlaku apa adanya). */
+    .change-log-diff { max-width: 100%; }
+    .change-log-before, .change-log-after {
+      flex: 0 1 auto;
+      width: auto;
+      max-width: none;
+      overflow-x: visible;
+    }
   }
   /* Varian utk aksi non-Edit (Tambah User, Tambah Store, dll) yang detailnya
      dipecah oleh parsePlainDetailPairs_ jadi "Label: value" tanpa before/after
