@@ -8784,17 +8784,22 @@ function openActivityLogDetailModal_(l, badgeClass) {
         '</div>';
       })();
 
+  // FIX (tombol Tutup dobel — sudah ada ikon X di header modal via
+  // modalHeaderHtml, ditambah tombol "Tutup" lagi di footer itu redundan,
+  // makan tempat, dan kurang modern utk modal read-only spt ini): modal
+  // Detail Aktivitas murni utk lihat info, tidak ada aksi lain (bukan form),
+  // jadi cukup 1 cara menutup yaitu ikon X di header. modal-body dikasih
+  // padding-bottom biar tetap ada jarak napas di bawah tanpa footer.
   openModal(
     modalHeaderHtml({ icon: ICONS.history, color: 'primary', title: 'Detail Aktivitas', subtitle: formatTimestampDisplay(l.timestamp) }) +
-    '<div class="modal-body">' +
+    '<div class="modal-body" style="padding-bottom:20px;">' +
       '<div class="detail-kv-list">' +
         '<div class="detail-kv-row"><span class="detail-kv-label">User</span><span class="detail-kv-value">' + escapeHtml(l.nama || l.username) + '</span></div>' +
         '<div class="detail-kv-row"><span class="detail-kv-label">Aksi</span><span class="detail-kv-value"><span class="badge ' + badgeClass + '">' + escapeHtml(l.aksi) + '</span></span></div>' +
         '<div class="detail-kv-row"><span class="detail-kv-label">Target</span><span class="detail-kv-value">' + escapeHtml(l.target) + '</span></div>' +
         '<div class="detail-kv-row detail-kv-row-block"><span class="detail-kv-label">' + (parsedDetail.changes.length ? 'Perubahan' : 'Detail') + '</span>' + detailBodyHtml + '</div>' +
       '</div>' +
-    '</div>' +
-    '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Tutup</button></div>'
+    '</div>'
   );
 }
 
