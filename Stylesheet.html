@@ -4734,8 +4734,20 @@
   .change-log-field { font-weight: 700; color: var(--gray-900); font-size: 12.5px; }
   .change-log-diff { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
   .change-log-before, .change-log-after {
-    flex: 1 1 0;
+    /* FIX (mobile+desktop): sebelumnya "flex: 1 1 0" memaksa kedua pill
+       sama lebar berdua di dalam .change-log-diff yang lebarnya terbatas —
+       kalau isinya angka panjang (barcode 13 digit), pill jadi lebih sempit
+       dari teksnya dan teks discroll diam-diam ke kanan lewat
+       overflow-x:auto tanpa scrollbar terlihat, jadi KELIHATANNYA seperti
+       kepotong padahal cuma ke-scroll. Sekarang pill auto-lebar ikut
+       panjang teksnya (flex: 0 1 auto, width: auto) di SEMUA ukuran layar,
+       supaya "0" tetap kecil dan "17001"/barcode 13 digit tetap tampil
+       penuh tanpa scroll. min-width:0 tetap dipertahankan supaya pill masih
+       bisa menyusut kalau memang layar terlalu sempit (flex child default).*/
+    flex: 0 1 auto;
+    width: auto;
     min-width: 0;
+    max-width: 100%;
     min-height: 26px;
     box-sizing: border-box;
     padding: 4px 10px;
@@ -4743,12 +4755,6 @@
     font-weight: 700;
     font-size: 12.5px;
     text-align: center;
-    /* FIX: value panjang (mis. angka barcode 13 digit) tadinya word-break
-       jadi 2 baris di dalam pill bulat -> kelihatan aneh/tidak rapi. Pill
-       sekarang dipaksa 1 baris (nowrap); kalau value tetap lebih lebar dari
-       pill, teksnya di-scroll horizontal halus di dalam pill itu sendiri
-       (bukan melebarkan card atau memotong teks), jadi bentuk pill & layout
-       card tetap konsisten walau isinya panjang. */
     white-space: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
@@ -4787,24 +4793,7 @@
     /* Di layar lebih lebar: field di kiri, diff (pill+panah) di kanan, 1 baris sejajar. */
     .change-log-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
     .change-log-field { flex: 0 0 auto; }
-    .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 72%; }
-    /* FIX (desktop): sebelumnya .change-log-before/.change-log-after dipaksa
-       "flex: 1 1 0" (sama lebar berdua) di dalam .change-log-diff yang
-       max-width-nya dibatasi 72% — kalau isinya angka panjang (barcode 13
-       digit), pill jadi lebih sempit dari teksnya dan teks discroll diam-diam
-       ke kanan lewat overflow-x:auto (tanpa scrollbar terlihat), jadi
-       KELIHATANNYA seperti kepotong padahal cuma ke-scroll. Di desktop, pill
-       sekarang auto-lebar ikut panjang teksnya (bukan dipaksa sama rata),
-       dan .change-log-diff dibolehkan melebar (max-width dinaikkan) supaya
-       kedua pill dapat ruang cukup tanpa perlu scroll. Mobile TIDAK disentuh
-       (aturan di luar media query ini tetap berlaku apa adanya). */
-    .change-log-diff { max-width: 100%; }
-    .change-log-before, .change-log-after {
-      flex: 0 1 auto;
-      width: auto;
-      max-width: none;
-      overflow-x: visible;
-    }
+    .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 100%; }
   }
   /* Varian utk aksi non-Edit (Tambah User, Tambah Store, dll) yang detailnya
      dipecah oleh parsePlainDetailPairs_ jadi "Label: value" tanpa before/after
