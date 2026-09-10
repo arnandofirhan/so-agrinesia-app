@@ -4052,7 +4052,16 @@
      jadi teks apapun panjangnya tidak akan pernah terpotong. Desktop tetap
      di kanan atas (ruang cukup lega di sana). */
   @media (max-width: 640px) {
-    .loading-overlay:not(.loading-overlay-progress) {
+    /* FIX: sebelumnya selector ini (".loading-overlay:not(.loading-overlay-progress)")
+       juga ke-match oleh splash FULLSCREEN (karena splash bukan
+       .loading-overlay-progress), dan pakai :not() jadi spesifisitasnya
+       lebih tinggi daripada rule .loading-overlay-fullscreen sendiri — jadi
+       di mobile, posisi/lebar pill kecil ini MENIMPA BALIK splash fullscreen
+       (inset:16px, width:max-content dst), splash jadi kelihatan gajelas
+       ukurannya / tidak menutupi layar. Tambah ":not(.loading-overlay-fullscreen)"
+       supaya rule ini HANYA berlaku utk toast loading pill kecil, tidak lagi
+       menyentuh splash fullscreen. */
+    .loading-overlay:not(.loading-overlay-progress):not(.loading-overlay-fullscreen) {
       inset: 16px auto auto 50%;
       transform: translateX(-50%);
       max-width: calc(100vw - 32px);
