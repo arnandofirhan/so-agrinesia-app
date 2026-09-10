@@ -1504,13 +1504,31 @@
     border-top: 1.5px solid var(--gray-200);
   }
   @media (max-width: 900px) {
-    .filter-bar:has(+ .table-wrapper .table-card-generic) {
+    /* FIX (sudut lancip/kepotong di mobile): rule ini SEBELUMNYA hanya
+       mengecek ".table-card-generic" — tapi ada beberapa jenis tabel lain
+       yang JUGA berubah jadi transparan/tanpa card di mode mobile (lihat
+       ".table-wrapper:has(...)" masing-masing di bawah): ".table-so-fisik",
+       ".table-activity-log", ".table-riwayat-card". Utk tabel2 itu,
+       .filter-bar TIDAK ikut di-reset balik ke bentuk card mandiri (rounded
+       penuh + shadow) — jadi sudut BAWAH filter-bar tetap lancip/kotak
+       (warisan mode "menyatu dengan tabel" dari rule dasar di atas),
+       padahal di mobile tidak ada lagi tabel di bawahnya yang menyambung
+       (makanya sudutnya harus tumpul semua, sama seperti sudut atasnya).
+       Selector digabung supaya SEMUA jenis tabel mode-card mobile ini
+       konsisten diperlakukan sama. */
+    .filter-bar:has(+ .table-wrapper .table-card-generic),
+    .filter-bar:has(+ .table-wrapper .table-so-fisik),
+    .filter-bar:has(+ .table-wrapper .table-activity-log),
+    .filter-bar:has(+ .table-wrapper .table-riwayat-card) {
       border-radius: var(--radius);
       border-bottom: 1px solid var(--gray-200);
       margin-bottom: 14px;
       box-shadow: var(--shadow-sm);
     }
-    .filter-bar:has(+ .table-wrapper .table-card-generic) + .table-wrapper {
+    .filter-bar:has(+ .table-wrapper .table-card-generic) + .table-wrapper,
+    .filter-bar:has(+ .table-wrapper .table-so-fisik) + .table-wrapper,
+    .filter-bar:has(+ .table-wrapper .table-activity-log) + .table-wrapper,
+    .filter-bar:has(+ .table-wrapper .table-riwayat-card) + .table-wrapper {
       border-top: none;
     }
   }
