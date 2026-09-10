@@ -1607,11 +1607,19 @@ async function refreshNotifBadge() {
 }
 
 function checkSession() {
-  // Splash HTML awal (#loadingOverlay) DIHAPUS atas permintaan — sekarang
-  // overlay langsung disembunyikan seketika begitu checkSession jalan, jadi
-  // yang terlihat cuma splash native Android (dari manifest/theme_color)
-  // lalu langsung ke halaman login/dashboard tanpa lapisan HTML tambahan.
-  hideLoading();
+  // FIX (splash "kelipas" nampilin shadow/blob halaman login sesaat sebelum
+  // dashboard muncul saat reload): SEBELUMNYA overlay splash disembunyikan
+  // (hideLoading()) DULU, baru sesudah itu diputuskan mau ke dashboard
+  // (enterApp()) atau tetap di halaman login. Di antara 2 langkah itu ada
+  // jeda 1 frame render di mana halaman login (yang dari awal sudah ada di
+  // DOM, tidak "hidden", background hijau + shape blobnya) sempat kelihatan
+  // TANPA overlay yang menutupinya, sebelum akhirnya enterApp() menyembunyikannya
+  // lagi dan menampilkan dashboard — makanya kelihatan seperti "shadow" halaman
+  // login berkedip sebentar. Sekarang urutannya dibalik: status login/dashboard
+  // diputuskan & diterapkan (enterApp()) DULU sementara overlay masih menutupi
+  // seluruh layar, baru SETELAH itu overlay dilepas (hideLoading() terakhir) —
+  // jadi apapun yang ada di baliknya sudah dalam kondisi final saat overlay
+  // dibuka, tidak ada lagi frame antara yang bocor kelihatan.
   const saved = sessionStorage.getItem('so_user');
   if (saved) {
     try {
@@ -1619,6 +1627,7 @@ function checkSession() {
       enterApp();
     } catch (e) {}
   }
+  hideLoading();
 }
 if (document.readyState === 'complete') {
   checkSession();
@@ -2607,11 +2616,18 @@ function renderDashboardStatGrid(d, params) {
   const akurasiVal = (d.akurasiPct === undefined || d.akurasiPct === null) ? 0 : d.akurasiPct;
   const akurasiColor = akurasiVal >= 95 ? 'green' : (akurasiVal >= 85 ? 'orange' : 'red');
 
+  const isDashboardHarian = TIPE_SO_STATE.dashboard === 'Harian';
+
   statGrid.innerHTML =
     statCard(ICONS.percent, akurasiColor, akurasiVal.toFixed(2) + '%', 'Akurasi Stock', toRiwayatAkurasi, false,
       'Akurasi = (1 − Total Selisih Absolut ÷ Total Stock Sistem) × 100%. Dihitung dari seluruh SO berstatus Selesai sesuai filter yang aktif saat ini (Store/Tanggal/' + TIPE_SO_STATE.dashboard + ').') +
     statCard(ICONS.clipboard, 'green', formatNumber(d.soCount), 'SO Selesai', toRiwayatSoCount) +
-    statCard(ICONS.hourglass, 'blue', formatNumber(d.menungguApprovalCount), 'Pending Approval', toRiwayatMenungguApproval) +
+    // FIX (permintaan): SO Harian tidak lagi melalui tahap approval (lihat
+    // saveSoFisik di Code.gs — Harian langsung "Selesai"), jadi card
+    // "Pending Approval" ini TIDAK relevan lagi & disembunyikan saat
+    // filter dashboard aktifnya Harian. Mingguan/Bulanan tetap tampil
+    // seperti sebelumnya karena masih melalui approval SC.
+    (isDashboardHarian ? '' : statCard(ICONS.hourglass, 'blue', formatNumber(d.menungguApprovalCount), 'Pending Approval', toRiwayatMenungguApproval)) +
     statCard(ICONS.box, 'gray', formatNumber(d.totalItem), 'Total Item', toTotalItemModal) +
     statCard(ICONS.target, 'gray', formatNumber(d.itemSesuai), 'Item Sesuai', toItemSesuaiModal) +
     statCard(ICONS.trendDown, 'red', formatNumber(d.itemMinus), 'Item Minus', toItemMinusModal) +
@@ -6133,12 +6149,30 @@ async function saveSoFisikData() {
     String(CURRENT_SO_DETAIL.status) === 'Draft' &&
     String(CURRENT_SO_DETAIL.approvalNote || '').trim() !== '';
 
+  // FIX (SO Harian tidak perlu approval): dialog konfirmasi sebelumnya
+  // SELALU bilang "Ajukan untuk Approval?" / status jadi "Pending Approval"
+  // — padahal backend (saveSoFisik di Code.gs) sekarang langsung
+  // menyelesaikan SO Harian tanpa approval. Tambah cabang khusus supaya
+  // teksnya sesuai kenyataan utk SO Harian (tidak menyebut approval sama
+  // sekali), sementara SO Mingguan/Bulanan tetap seperti sebelumnya.
+  const isSoHarian = CURRENT_SO_DETAIL && CURRENT_SO_DETAIL.tipeSo === 'Harian';
+
   const modalConfig = isRevisiSetelahReject ? {
     type: 'success',
     title: 'Selesaikan Revisi SO?',
     desc: 'Data fisik akan tersimpan sebagai revisi final — tidak perlu approval ulang dari approver.',
     detailRows: [
       { label: 'Status setelah ini', value: 'Selesai (terkunci)' }
+    ],
+    confirmLabel: 'Ya, Selesaikan',
+    confirmClass: 'btn-primary'
+  } : isSoHarian ? {
+    type: 'success',
+    title: 'Selesaikan Stock Opname?',
+    desc: 'Data fisik akan tersimpan dan SO Harian langsung berstatus Selesai — tidak memerlukan approval.',
+    detailRows: [
+      { label: 'Status setelah ini', value: 'Selesai (terkunci)' },
+      { label: 'Bisa diedit lagi?', value: 'Tidak, data sudah final' }
     ],
     confirmLabel: 'Ya, Selesaikan',
     confirmClass: 'btn-primary'
