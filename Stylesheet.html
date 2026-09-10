@@ -4729,10 +4729,18 @@
      angka yang berdempetan dan tetap rapi di desktop maupun mobile. */
   .change-log-table { display: flex; flex-direction: column; gap: 8px; }
   .change-log-row {
+    /* FIX (permintaan): field ("Harga"/"Barcode") & pill sebelum-sesudah
+       SEBELUMNYA selalu di-stack (label di atas, pill di bawah) di mobile
+       (flex-direction: column) — di desktop sudah 1 baris lewat media
+       query >=481px, tapi mobile belum. Sekarang default-nya row (1 baris)
+       di SEMUA ukuran layar: label di kiri, pill+panah di kanan, mepet ke
+       ujung kanan card. */
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 10px;
     padding: 10px 12px;
     font-size: 12.5px;
     background: var(--gray-50, #f9fafb);
@@ -4741,8 +4749,8 @@
   }
   .change-log-row + .change-log-row { margin-top: 0; }
   .change-log-head { display: none; }
-  .change-log-field { font-weight: 700; color: var(--gray-900); font-size: 12.5px; }
-  .change-log-diff { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+  .change-log-field { flex: 0 0 auto; font-weight: 700; color: var(--gray-900); font-size: 12.5px; }
+  .change-log-diff { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 1 auto; min-width: 0; width: auto; }
   .change-log-before, .change-log-after {
     /* FIX (mobile+desktop): sebelumnya "flex: 1 1 0" memaksa kedua pill
        sama lebar berdua di dalam .change-log-diff yang lebarnya terbatas —
@@ -4800,10 +4808,10 @@
   html[data-theme="dark"] .change-log-after { color: #6ee7b7; background: rgba(52, 211, 153, 0.18); }
   html[data-theme="dark"] .change-log-arrow { background: rgba(255,255,255,0.08); color: var(--gray-500); border: 1px solid rgba(255,255,255,0.12); }
   @media (min-width: 481px) {
-    /* Di layar lebih lebar: field di kiri, diff (pill+panah) di kanan, 1 baris sejajar. */
-    .change-log-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
-    .change-log-field { flex: 0 0 auto; }
-    .change-log-diff { width: auto; flex: 0 1 auto; min-width: 220px; max-width: 100%; }
+    /* Sudah 1 baris sejak base rule di atas (untuk semua ukuran layar);
+       di layar lebih lebar cukup diberi sedikit lebih banyak ruang minimum
+       supaya pill tidak terlalu mepet ke label field. */
+    .change-log-diff { min-width: 220px; }
   }
   /* Varian utk aksi non-Edit (Tambah User, Tambah Store, dll) yang detailnya
      dipecah oleh parsePlainDetailPairs_ jadi "Label: value" tanpa before/after
