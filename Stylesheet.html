@@ -4201,6 +4201,16 @@
     flex-direction: column; align-items: center; justify-content: center;
     padding: 0;
     gap: 18px;
+    /* FIX: .loading-overlay (rule dasar) punya "max-width: calc(100vw - 48px)"
+       untuk mode pill kecil (toast loading di pojok). Rule itu tidak
+       ke-override di sini, jadi walau inset:0 sudah diset, kotaknya tetap
+       dipaksa mentok di lebar (100vw - 48px) -> sisi kanan splash fullscreen
+       kelihatan kepotong/tidak nyampe ujung layar (khususnya kelihatan di
+       desktop karena viewport-nya lebar). max-width & width dipaksa penuh
+       di sini supaya splash betul-betul full-bleed menutupi seluruh layar. */
+    max-width: none;
+    width: 100vw;
+    height: 100vh;
   }
   .loading-overlay-fullscreen .brand-spinner-logo {
     background: #fff;
